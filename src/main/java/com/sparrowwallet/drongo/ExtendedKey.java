@@ -157,6 +157,9 @@ public class ExtendedKey {
         zprv("zprv", 0x04b2430c, ScriptType.P2WPKH, true, true),
         zpub("zpub", 0x04B24746, ScriptType.P2WPKH, false, true),
         Ltub("Ltub", 0x019da462, ScriptType.P2WPKH, false, true),
+        //Litecoin MWEB extended key headers as used by Electrum-LTC (mprv/mpub) - required to import an MWEB keystore
+        mprv("mprv", 0x03a3f988, ScriptType.MWEB, true, true),
+        mpub("mpub", 0x03a3fdc2, ScriptType.MWEB, false, true),
         Yprv("Yprv", 0x0295b005, ScriptType.P2SH_P2WSH, true, true),
         Ypub("Ypub", 0x0295b43f, ScriptType.P2SH_P2WSH, false, true),
         Zprv("Zprv", 0x02aa7a99, ScriptType.P2WSH, true, true),
@@ -170,7 +173,10 @@ public class ExtendedKey {
         Uprv("Uprv", 0x024285b5, ScriptType.P2SH_P2WSH, true, false),
         Upub("Upub", 0x024289ef, ScriptType.P2SH_P2WSH, false, false),
         Vprv("Vprv", 0x02575048, ScriptType.P2WSH, true, false),
-        Vpub("Vpub", 0x02575483, ScriptType.P2WSH, false, false);
+        Vpub("Vpub", 0x02575483, ScriptType.P2WSH, false, false),
+        //Litecoin testnet MWEB extended key headers as used by Electrum-LTC (nprv/npub)
+        nprv("nprv", 0x03b8c41c, ScriptType.MWEB, true, false),
+        npub("npub", 0x03b8c856, ScriptType.MWEB, false, false);
 
         private final String name;
         private final int header;
