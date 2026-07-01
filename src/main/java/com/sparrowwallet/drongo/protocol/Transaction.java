@@ -128,14 +128,22 @@ public class Transaction extends ChildMessage {
 
     public Sha256Hash calculateTxId(boolean useWitnesses) {
         for(TransactionInput in : inputs) {
-            if((int)in.getOutpoint().getIndex() == -1) {
+            //An MWEB transaction carries its id directly on a sentinel input (see setMwebTxId), identified by a -1 index
+            //AND a non-zero hash holding the MWEB txid. Coinbase inputs and BIP322 to_spend inputs also use the
+            //0xFFFFFFFF index (== -1 as an int) but carry a zero prevout hash and must have their id computed normally -
+            //returning the zero hash for them made coinbase txids wrong and BIP322 signatures message-independent.
+            if((int)in.getOutpoint().getIndex() == -1 && !in.getOutpoint().getHash().equals(Sha256Hash.ZERO_HASH)) {
                 return in.getOutpoint().getHash();
             }
         }
 
         ByteArrayOutputStream stream = new UnsafeByteArrayOutputStream(length < 32 ? 32 : length + 32);
         try {
-            bitcoinSerializeToStream(stream, useWitnesses, false, false);
+            //Serialize with full=true so the raw input list is used rather than getInputs(), which filters out inputs
+            //with a negative (int) index. A coinbase or BIP322 to_spend input uses index 0xFFFFFFFF and must be included
+            //in the txid preimage; excluding it produced a 0-input serialization and hence a wrong, content-independent
+            //txid. MWEB transactions never reach here - they return their stored id from the sentinel-input check above.
+            bitcoinSerializeToStream(stream, useWitnesses, false, true);
         } catch (IOException e) {
             throw new RuntimeException(e); // cannot happen
         }
@@ -146,6 +154,22 @@ public class Transaction extends ChildMessage {
         addInput(txId, -1, new Script(List.of()));
         cachedTxId = null;
         cachedWTxId = null;
+    }
+
+    /**
+     * Returns true if this is an MWEB (MimbleWimble) transaction - one carrying its id on a sentinel input as set by
+     * {@link #setMwebTxId}. That input uses the -1 (0xFFFFFFFF) outpoint index together with a non-zero prevout hash
+     * holding the MWEB txid. Coinbase and BIP322 to_spend inputs also use the -1 index but carry a zero prevout hash,
+     * so they are correctly excluded here (mirrors the sentinel check in {@link #calculateTxId}). Canonical Litecoin
+     * transactions - including MWEB peg-in/peg-out (HogEx) transactions - are not MWEB transactions by this definition.
+     */
+    public boolean isMweb() {
+        for(TransactionInput in : inputs) {
+            if((int)in.getOutpoint().getIndex() == -1 && !in.getOutpoint().getHash().equals(Sha256Hash.ZERO_HASH)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean isSegwit() {

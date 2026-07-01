@@ -133,11 +133,11 @@ public class PSBTTest {
         Assertions.assertEquals(4294967294L, psbt1.getTransaction().getInputs().get(0).getSequenceNumber());
 
         Assertions.assertEquals(99999699L, psbt1.getTransaction().getOutputs().get(0).getValue());
-        Assertions.assertEquals("1L2tGENeoh4mSoiUZrSbs1J3jazSdJH9QS", psbt1.getTransaction().getOutputs().get(0).getScript().getToAddresses()[0].toString());
+        Assertions.assertEquals("LeFqXSgUtMJphcQdjzRu92MowoMiiK1HaK", psbt1.getTransaction().getOutputs().get(0).getScript().getToAddresses()[0].toString());
         Assertions.assertEquals("76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac", psbt1.getTransaction().getOutputs().get(0).getScript().getProgramAsHex());
         Assertions.assertEquals("OP_DUP OP_HASH160 d0c59903c5bac2868760e90fd521a4665aa76520 OP_EQUALVERIFY OP_CHECKSIG", psbt1.getTransaction().getOutputs().get(0).getScript().toString());
         Assertions.assertEquals(100000000L, psbt1.getTransaction().getOutputs().get(1).getValue());
-        Assertions.assertEquals("36YhUacEtcnkfhSbxwm11wDCexLGBLgJF6", psbt1.getTransaction().getOutputs().get(1).getScript().getToAddresses()[0].toString());
+        Assertions.assertEquals("MCkqnU2CqjeBUCiW4pkLqaTbyevi6HTGaY", psbt1.getTransaction().getOutputs().get(1).getScript().getToAddresses()[0].toString());
         Assertions.assertEquals("a9143545e6e33b832c47050f24d3eeb93c9c03948bc787", psbt1.getTransaction().getOutputs().get(1).getScript().getProgramAsHex());
         Assertions.assertEquals("OP_HASH160 3545e6e33b832c47050f24d3eeb93c9c03948bc7 OP_EQUAL", psbt1.getTransaction().getOutputs().get(1).getScript().toString());
 

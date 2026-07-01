@@ -56,7 +56,7 @@ public class OutputDescriptorTest {
         KeyDerivation derivation = descriptor.getKeyDerivation(extendedPublicKey);
         Assertions.assertEquals("d34db33f", derivation.getMasterFingerprint());
         Assertions.assertEquals("m/44'/0'/0'", derivation.getDerivationPath());
-        Assertions.assertEquals("14qCH92HCyDDBFFZdhDt1WMfrMDYnBFYMF", descriptor.getAddress(descriptor.getChangeDerivation(0)).toString());
+        Assertions.assertEquals("LP49YML7HdTGS3wioqDBHXRS4ZapqBqk28", descriptor.getAddress(descriptor.getChangeDerivation(0)).toString());
     }
 
     @Test
@@ -67,7 +67,7 @@ public class OutputDescriptorTest {
         KeyDerivation derivation = descriptor.getKeyDerivation(extendedPublicKey);
         Assertions.assertEquals("f09a3b29", derivation.getMasterFingerprint());
         Assertions.assertEquals("m/49'/0'/0'", derivation.getDerivationPath());
-        Assertions.assertEquals("31sNBFoYAaFggvNBAnnnLAc5ygfjZRCK6s", descriptor.getAddress(descriptor.getChangeDerivation(0)).toString());
+        Assertions.assertEquals("M85WV9DW7h77VRe5Gfn89orVJPGBWfhkT8", descriptor.getAddress(descriptor.getChangeDerivation(0)).toString());
     }
 
     @Test
@@ -75,7 +75,7 @@ public class OutputDescriptorTest {
         OutputDescriptor descriptor = OutputDescriptor.getOutputDescriptor("wsh(sortedmulti(2,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/0/*,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/*))");
         Assertions.assertEquals("wsh(sortedmulti(2,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/0/*,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/*))", descriptor.toString());
         Assertions.assertEquals(2, descriptor.getMultisigThreshold());
-        Assertions.assertEquals("bc1qf5l7g5t5v2tp2wnwfeqlktkds7zvprmm7afjn6f85fdesc2pwedsh42kcl", descriptor.getAddress(KeyDerivation.parsePath("0/0")).toString());
+        Assertions.assertEquals("ltc1qf5l7g5t5v2tp2wnwfeqlktkds7zvprmm7afjn6f85fdesc2pweds53yxz6", descriptor.getAddress(KeyDerivation.parsePath("0/0")).toString());
     }
 
     @Test
@@ -141,8 +141,8 @@ public class OutputDescriptorTest {
         OutputDescriptor outputDescriptor = OutputDescriptor.getOutputDescriptor(desc);
         Wallet wallet = outputDescriptor.toWallet();
         Assertions.assertEquals("fe05631b", wallet.getKeystores().get(0).getKeyDerivation().getMasterFingerprint());
-        Assertions.assertEquals("m/84'/0'/0'", wallet.getKeystores().get(0).getKeyDerivation().getDerivationPath());
-        Assertions.assertEquals("xpub6DTvSp2zaQ3DHrB19BnXTPEsMhnsVPKFgb47x8tkg1VjuwkKvyEeL3Jc4ojgiVUit2ron1SqkQph1hVPtGfREGkiZ8KCbN2TGXnoXHnQ12E", wallet.getKeystores().get(0).getExtendedPublicKey().toString());
+        Assertions.assertEquals("m/84'/2'/0'", wallet.getKeystores().get(0).getKeyDerivation().getDerivationPath());
+        Assertions.assertEquals("xpub6DB1ZsjTQq1j7WS5bcMdMpCyAo1948eMNC6jKjEjkK94gc3Sw6pSBWEc8eMwaxe5KBY8e2fswnA1J5aG65uhjpjqScQu8GqLjVuh1TSmihY", wallet.getKeystores().get(0).getExtendedPublicKey().toString());
     }
 
     @Test

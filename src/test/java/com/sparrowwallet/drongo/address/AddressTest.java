@@ -12,29 +12,29 @@ import java.util.List;
 public class AddressTest {
     @Test
     public void validAddressTest() throws InvalidAddressException {
-        Address address1 = Address.fromString("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4");
+        Address address1 = Address.fromString("ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9");
         Assertions.assertTrue(address1 instanceof P2WPKHAddress);
-        Assertions.assertEquals("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", address1.toString());
+        Assertions.assertEquals("ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9", address1.toString());
 
-        Address address2 = Address.fromString("bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3");
+        Address address2 = Address.fromString("ltc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qmu8tk5");
         Assertions.assertTrue(address2 instanceof P2WSHAddress);
-        Assertions.assertEquals("bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3", address2.toString());
+        Assertions.assertEquals("ltc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qmu8tk5", address2.toString());
 
-        Address address3 = Address.fromString("19Sp9dLinHy3dKo2Xxj53ouuZWAoVGGhg8");
+        Address address3 = Address.fromString("LTfmQqeYrxD6t8VBi6iNKpyfmiY5Z3bdyv");
         Assertions.assertTrue(address3 instanceof P2PKHAddress);
-        Assertions.assertEquals("19Sp9dLinHy3dKo2Xxj53ouuZWAoVGGhg8", address3.toString());
+        Assertions.assertEquals("LTfmQqeYrxD6t8VBi6iNKpyfmiY5Z3bdyv", address3.toString());
 
-        Address address4 = Address.fromString("34jnjFM4SbaB7Q8aMtNDG849RQ1gUYgpgo");
+        Address address4 = Address.fromString("MAww38m2PiRbuuQUTmMZ5mJYk6c8TVHAxe");
         Assertions.assertTrue(address4 instanceof P2SHAddress);
-        Assertions.assertEquals("34jnjFM4SbaB7Q8aMtNDG849RQ1gUYgpgo", address4.toString());
+        Assertions.assertEquals("MAww38m2PiRbuuQUTmMZ5mJYk6c8TVHAxe", address4.toString());
 
-        Address address5 = Address.fromString(Network.TESTNET, "tb1qawkzyj2l5yck5jq4wyhkc4837x088580y9uyk8");
+        Address address5 = Address.fromString(Network.TESTNET, "tltc1qawkzyj2l5yck5jq4wyhkc4837x088580ad76xw");
         Assertions.assertTrue(address5 instanceof P2WPKHAddress);
-        Assertions.assertEquals("tb1qawkzyj2l5yck5jq4wyhkc4837x088580y9uyk8", address5.toString(Network.TESTNET));
+        Assertions.assertEquals("tltc1qawkzyj2l5yck5jq4wyhkc4837x088580ad76xw", address5.toString(Network.TESTNET));
 
-        Address address6 = Address.fromString(Network.TESTNET, "tb1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsjcsdma");
+        Address address6 = Address.fromString(Network.TESTNET, "tltc1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsdmvvyz");
         Assertions.assertTrue(address6 instanceof P2WSHAddress);
-        Assertions.assertEquals("tb1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsjcsdma", address6.toString(Network.TESTNET));
+        Assertions.assertEquals("tltc1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsdmvvyz", address6.toString(Network.TESTNET));
 
         Address address7 = Address.fromString(Network.TESTNET, "mng6R5oLWBBo8iFWU9Mx4zFy5pWhrWMeW2");
         Assertions.assertTrue(address7 instanceof P2PKHAddress);
@@ -44,34 +44,34 @@ public class AddressTest {
         Assertions.assertTrue(address8 instanceof P2PKHAddress);
         Assertions.assertEquals("n1S1rnnZm3RdW9iuAF6Hjk3gLZWGc59zDi", address8.toString(Network.TESTNET));
 
-        Address address9 = Address.fromString(Network.TESTNET, "2NCZUtUt6gzXyBiPEQi5yQyrgR6f6F6Ki6A");
+        Address address9 = Address.fromString(Network.TESTNET, "QfvF1VkLi6b4Ku9H2p7zVgJ7ZV6vBUR3zH");
         Assertions.assertTrue(address9 instanceof P2SHAddress);
-        Assertions.assertEquals("2NCZUtUt6gzXyBiPEQi5yQyrgR6f6F6Ki6A", address9.toString(Network.TESTNET));
+        Assertions.assertEquals("QfvF1VkLi6b4Ku9H2p7zVgJ7ZV6vBUR3zH", address9.toString(Network.TESTNET));
 
         Address address10 = Address.fromString(Network.SIGNET, "2NCZUtUt6gzXyBiPEQi5yQyrgR6f6F6Ki6A");
         Assertions.assertTrue(address10 instanceof P2SHAddress);
         Assertions.assertEquals("2NCZUtUt6gzXyBiPEQi5yQyrgR6f6F6Ki6A", address10.toString(Network.SIGNET));
 
-        Address address11 = Address.fromString("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0");
+        Address address11 = Address.fromString("ltc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqpj6zg2");
         Assertions.assertTrue(address11 instanceof P2TRAddress);
-        Assertions.assertEquals("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0", address11.toString());
+        Assertions.assertEquals("ltc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqpj6zg2", address11.toString());
 
-        Address address12 = Address.fromString(Network.TESTNET, "tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c");
+        Address address12 = Address.fromString(Network.TESTNET, "tltc1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvseskjtjs8");
         Assertions.assertTrue(address12 instanceof P2TRAddress);
-        Assertions.assertEquals("tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c", address12.toString(Network.TESTNET));
+        Assertions.assertEquals("tltc1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvseskjtjs8", address12.toString(Network.TESTNET));
     }
 
     @Test
     public void testnetValidAddressTest() throws InvalidAddressException {
         Network.set(Network.TESTNET);
 
-        Address address5 = Address.fromString("tb1qawkzyj2l5yck5jq4wyhkc4837x088580y9uyk8");
+        Address address5 = Address.fromString("tltc1qawkzyj2l5yck5jq4wyhkc4837x088580ad76xw");
         Assertions.assertTrue(address5 instanceof P2WPKHAddress);
-        Assertions.assertEquals("tb1qawkzyj2l5yck5jq4wyhkc4837x088580y9uyk8", address5.toString());
+        Assertions.assertEquals("tltc1qawkzyj2l5yck5jq4wyhkc4837x088580ad76xw", address5.toString());
 
-        Address address6 = Address.fromString("tb1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsjcsdma");
+        Address address6 = Address.fromString("tltc1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsdmvvyz");
         Assertions.assertTrue(address6 instanceof P2WSHAddress);
-        Assertions.assertEquals("tb1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsjcsdma", address6.toString());
+        Assertions.assertEquals("tltc1q8kdkthp5a6vfrdas84efkpv25ul3s9wpzc755cra8av48xq4a7wsdmvvyz", address6.toString());
 
         Address address7 = Address.fromString("mng6R5oLWBBo8iFWU9Mx4zFy5pWhrWMeW2");
         Assertions.assertTrue(address7 instanceof P2PKHAddress);
@@ -81,13 +81,13 @@ public class AddressTest {
         Assertions.assertTrue(address8 instanceof P2PKHAddress);
         Assertions.assertEquals("n1S1rnnZm3RdW9iuAF6Hjk3gLZWGc59zDi", address8.toString());
 
-        Address address9 = Address.fromString("2NCZUtUt6gzXyBiPEQi5yQyrgR6f6F6Ki6A");
+        Address address9 = Address.fromString("QfvF1VkLi6b4Ku9H2p7zVgJ7ZV6vBUR3zH");
         Assertions.assertTrue(address9 instanceof P2SHAddress);
-        Assertions.assertEquals("2NCZUtUt6gzXyBiPEQi5yQyrgR6f6F6Ki6A", address9.toString());
+        Assertions.assertEquals("QfvF1VkLi6b4Ku9H2p7zVgJ7ZV6vBUR3zH", address9.toString());
 
-        Address address12 = Address.fromString("tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c");
+        Address address12 = Address.fromString("tltc1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvseskjtjs8");
         Assertions.assertTrue(address12 instanceof P2TRAddress);
-        Assertions.assertEquals("tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c", address12.toString());
+        Assertions.assertEquals("tltc1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvseskjtjs8", address12.toString());
     }
 
     @Test
@@ -115,7 +115,7 @@ public class AddressTest {
 
     @Test
     public void invalidCharacterAddressTest() throws InvalidAddressException {
-        Assertions.assertThrows(InvalidAddressException.class, () -> Address.fromString("bc1qw508d6qejxtdg4y5R3zarvary0c5xw7kv8f3t4"));
+        Assertions.assertThrows(InvalidAddressException.class, () -> Address.fromString("ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4nb"));
     }
 
     @Test
@@ -139,13 +139,13 @@ public class AddressTest {
                 "tc1qw508d6qejxtdg4y5r3zarvary0c5xw7kg3g4ty", // Invalid human-readable part
                 "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5", // Invalid checksum
                 "BC13W508D6QEJXTDG4Y5R3ZARVARY0C5XW7KN40WF2", // Invalid witness version
-                "bc1rw5uspcuh", // Invalid program length
-                "bc10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5rljs90", // Invalid program length
+                "ltc1rw58r3kry", // Invalid program length
+                "ltc10w508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kw5m6y25d", // Invalid program length
                 "BC1QR508D6QEJXTDG4Y5R3ZARVARYV98GJ9P", // Invalid program length for witness version 0 (per BIP141)
-                "tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q0sL5k7", // Mixed case
-                "bc1zw508d6qejxtdg4y5r3zarvaryvqyzf3du", // zero padding of more than 4 bits
-                "tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3pjxtptv", // Non-zero padding in 8-to-5 conversion
-                "bc1gmk9yu" // Empty data section
+                "tltc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qsnr4fp", // Mixed case
+                "ltc1zw508d6qejxtdg4y5r3zarvaryvqw53wr5", // zero padding of more than 4 bits
+                "tltc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3pd9hq5n", // Non-zero padding in 8-to-5 conversion
+                "ltc153m7rf" // Empty data section
         );
         for (String address : invalidAddresses) {
             Assertions.assertThrows(InvalidAddressException.class, () -> Address.fromString(address));
@@ -156,18 +156,18 @@ public class AddressTest {
     public void bip350InvalidAddressesTest() throws InvalidAddressException {
         List<String> invalidAddresses = Arrays.asList(
                 "tc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq5zuyut", // Invalid human-readable part
-                "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqh2y7hd", // Invalid checksum (Bech32 instead of Bech32m)
-                "tb1z0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqglt7rf", // Invalid checksum (Bech32 instead of Bech32m)
+                "ltc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq5w2wdg", // Invalid checksum (Bech32 instead of Bech32m)
+                "tltc1z0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqhuhluk", // Invalid checksum (Bech32 instead of Bech32m)
                 "BC1S0XLXVLHEMJA6C4DQV22UAPCTQUPFHLXM9H8Z3K2E72Q4K9HCZ7VQ54WELL", // Invalid checksum (Bech32 instead of Bech32m)
-                "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kemeawh", // Invalid checksum (Bech32m instead of Bech32)
-                "tb1q0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq24jc47", // Invalid checksum (Bech32m instead of Bech32)
+                "ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7ka8rek8", // Invalid checksum (Bech32m instead of Bech32)
+                "tltc1q0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq4kwe2p", // Invalid checksum (Bech32m instead of Bech32)
                 "bc1p38j9r5y49hruaue7wxjce0updqjuyyx0kh56v8s25huc6995vvpql3jow4", // Invalid character in checksum
                 "BC130XLXVLHEMJA6C4DQV22UAPCTQUPFHLXM9H8Z3K2E72Q4K9HCZ7VQ7ZWS8R", // Invalid witness version
-                "bc1pw5dgrnzv", // Invalid program length (1 byte)
-                "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav253zgeav", // Invalid program length (41 bytes)
-                "tb1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq47Zagq", // Mixed case
-                "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qwwzcrf", // zero padding of more than 4 bits
-                "tb1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vpggkg4j" // Non-zero padding in 8-to-5 conversion
+                "ltc1pw5kmnaal", // Invalid program length (1 byte)
+                "ltc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav25f87rvw", // Invalid program length (41 bytes)
+                "tltc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq2a7uhl", // Mixed case
+                "ltc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07q76tu3e", // zero padding of more than 4 bits
+                "tltc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vpht2f2d" // Non-zero padding in 8-to-5 conversion
         );
         for (String address : invalidAddresses) {
             Assertions.assertThrows(InvalidAddressException.class, () -> Address.fromString(address));

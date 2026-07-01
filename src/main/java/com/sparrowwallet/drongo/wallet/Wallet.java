@@ -174,6 +174,87 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         return null;
     }
 
+    /**
+     * Adds a same-seed MWEB child wallet to this (canonical) master wallet. The child shares this wallet's
+     * keystore seed but is re-derived at the MWEB account path, so it carries its own ScriptType.MWEB keychain
+     * (including the MWEB scan secret + spend public key) derived from the same seed. This is the basis for a
+     * unified transparent + private wallet: the master tracks SegWit funds, the MWEB child tracks private funds,
+     * and both can be signed from one seed.
+     *
+     * The MWEB scan/spend keys are produced by {@link Keystore#fromSeed}/{@link Keystore#fromMasterPrivateExtendedKey},
+     * which derive them at {@code <derivation>/0'} (scan) and {@code <derivation>/1'} (spend) — the same recipe used
+     * for natively created and Electrum-LTC-imported MWEB keystores, so the resulting MWEB addresses are consistent
+     * across wallets restored from the same seed.
+     */
+    public Wallet addMwebChildWallet() {
+        Wallet childWallet = this.copy();
+
+        if(!isMasterWallet()) {
+            throw new IllegalStateException("Cannot add child wallet to existing child wallet");
+        }
+
+        if(policyType != PolicyType.SINGLE) {
+            throw new IllegalStateException("Cannot add MWEB child wallet to " + policyType.getName() + " wallet");
+        }
+
+        if(childWallet.containsMasterPrivateKeys() && childWallet.isEncrypted()) {
+            throw new IllegalStateException("Cannot derive child wallet xpub from encrypted wallet");
+        }
+
+        if(getChildWallet(ScriptType.MWEB) != null) {
+            throw new IllegalStateException("MWEB child wallet already exists");
+        }
+
+        childWallet.setId(null);
+        childWallet.setName("Private");
+        childWallet.setLabel(null);
+        childWallet.purposeNodes.clear();
+        childWallet.transactions.clear();
+        childWallet.detachedLabels.clear();
+        childWallet.childWallets.clear();
+        childWallet.storedBlockHeight = null;
+        childWallet.birthDate = null;
+        childWallet.setScriptType(ScriptType.MWEB);
+
+        List<ChildNumber> mwebDerivation = ScriptType.MWEB.getDefaultDerivation();
+        for(Keystore keystore : childWallet.getKeystores()) {
+            if(keystore.hasMasterPrivateKey()) {
+                try {
+                    Keystore derivedKeystore = keystore.hasSeed() ? Keystore.fromSeed(keystore.getSeed(), mwebDerivation) : Keystore.fromMasterPrivateExtendedKey(keystore.getMasterPrivateExtendedKey(), mwebDerivation);
+                    keystore.setKeyDerivation(derivedKeystore.getKeyDerivation());
+                    keystore.setExtendedPublicKey(derivedKeystore.getExtendedPublicKey());
+                    keystore.setMwebScanPrivateKey(derivedKeystore.getMwebScanPrivateKey());
+                    keystore.setMwebSpendPublicKey(derivedKeystore.getMwebSpendPublicKey());
+                } catch(Exception e) {
+                    throw new IllegalStateException("Cannot derive keystore for MWEB account", e);
+                }
+            } else {
+                throw new IllegalStateException("Cannot derive MWEB child wallet from a watch-only keystore without imported MWEB keys");
+            }
+        }
+
+        childWallet.setMasterWallet(this);
+        getChildWallets().add(childWallet);
+        return childWallet;
+    }
+
+    /**
+     * Returns the same-seed MWEB child wallet attached to this master wallet, or null if none exists.
+     */
+    public Wallet getMwebChildWallet() {
+        return getChildWallet(ScriptType.MWEB);
+    }
+
+    public Wallet getChildWallet(ScriptType childScriptType) {
+        for(Wallet childWallet : getChildWallets()) {
+            if(!childWallet.isNested() && childWallet.getScriptType() == childScriptType) {
+                return childWallet;
+            }
+        }
+
+        return null;
+    }
+
     public Wallet addChildWallet(PaymentCode externalPaymentCode, ScriptType childScriptType, BlockTransactionHashIndex notificationOutput, BlockTransaction notificationTransaction, String label) {
         Wallet bip47Wallet = addChildWallet(externalPaymentCode, childScriptType, label);
         WalletNode notificationNode = bip47Wallet.getNode(KeyPurpose.NOTIFICATION);

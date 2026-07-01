@@ -28,7 +28,7 @@ public class KeystoreTest {
         DeterministicSeed seed = new DeterministicSeed("absent essay fox snake vast pumpkin height crouch silent bulb excuse razor", "", 0, DeterministicSeed.Type.BIP39);
         Keystore keystore = Keystore.fromSeed(seed, p2pkh.getDefaultDerivation());
 
-        Assertions.assertEquals("xpub6D9jqMkBdgTqrzTxXVo2w8yZCa7HvzJTybFevJ2StHSxBRhs8dzsVEke9TQ9QjZCKbWZvzbc8iSScBbsCiA11wT28hZmCv3YmjSFEqCLmMn", keystore.getExtendedPublicKey().toString());
+        Assertions.assertEquals("xpub6Bzz4uwSsd8wwTR2RrS7gUnAajD6nHqnS2pp17pABdKnEjFTYQvrA8FAkpj73Ciebf9yPcSa3HT7MnneBfS6ZBMcot6E6jrSncdHQqR8ieC", keystore.getExtendedPublicKey().toString());
     }
 
     @Test

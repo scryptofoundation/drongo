@@ -161,8 +161,11 @@ public class Bip322 {
         scriptSigChunks.add(ScriptChunk.fromOpcode(ScriptOpCodes.OP_0));
         scriptSigChunks.add(ScriptChunk.fromData(getBip322MessageHash(message)));
         Script scriptSig = new Script(scriptSigChunks);
-        toSpend.addInput(Sha256Hash.ZERO_HASH, 0xFFFFFFFFL, scriptSig, new TransactionWitness(toSpend, Collections.emptyList()));
-        toSpend.getInputs().getFirst().setSequenceNumber(0L);
+        //Use the input returned by addInput rather than getInputs(): the BIP322 to_spend input uses outpoint index
+        //0xFFFFFFFF, which getInputs() filters out (it drops inputs whose index cast to int is negative, an MWEB-related
+        //filter), so getInputs().getFirst() would throw NoSuchElementException here.
+        TransactionInput toSpendInput = toSpend.addInput(Sha256Hash.ZERO_HASH, 0xFFFFFFFFL, scriptSig, new TransactionWitness(toSpend, Collections.emptyList()));
+        toSpendInput.setSequenceNumber(0L);
         toSpend.addOutput(0L, address.getOutputScript());
 
         return toSpend;

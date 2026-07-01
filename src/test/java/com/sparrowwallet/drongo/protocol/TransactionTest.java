@@ -230,8 +230,8 @@ public class TransactionTest {
         Transaction transaction = new Transaction();
         spent0ScriptType.addSpendingInput(transaction, spent0Output, key0, signature0);
 
-        transaction.addOutput(3000000000L, Address.fromString("1GWUbNagGsvpwygRCjoczegGVDvpm5fLV8"));
-        transaction.addOutput(2000000000L, Address.fromString("19jCd38mHkNcXiGF4AjUCoJBSo7iqqjRHT"));
+        transaction.addOutput(3000000000L, Address.fromString("LajRratWMYAtCnNaNsnvGfk2hSJ6oJfzCd"));
+        transaction.addOutput(2000000000L, Address.fromString("LTx9tFSbNQcfnWxQEJimUpMwf1UzwM3fcZ"));
 
         Assertions.assertEquals(spendingTransaction.getLength(), transaction.getLength());
 
@@ -273,8 +273,8 @@ public class TransactionTest {
         spent0ScriptType.addSpendingInput(transaction, spent0Output, pubKey0, signature0);
         spent1ScriptType.addSpendingInput(transaction, spent1Output, pubKey1, signature1);
 
-        transaction.addOutput(922, Address.fromString("1JVsQ4L4HAcn58Gj5uF16dvgFNdVTarY6i"));
-        transaction.addOutput(9984568, Address.fromString("1Q7CEaM3CQ6ejGHgDZNbdTTAkoLcPk63nQ"));
+        transaction.addOutput(922, Address.fromString("LcipfGdtMprqKvxtG3EJNezSTazmXTVR2i"));
+        transaction.addOutput(9984568, Address.fromString("LiL9VnesH4Lhz4yqPhMtuUWvy1htUPkuvS"));
 
         Assertions.assertEquals(spendingTransaction.getLength(), transaction.getLength());
 
@@ -313,10 +313,10 @@ public class TransactionTest {
         Transaction transaction = new Transaction();
         spent0ScriptType.addMultisigSpendingInput(transaction, spent0Output, 2, pubKeySignatures);
 
-        transaction.addOutput(833300, Address.fromString("31mKrRn3xQoGppLY5dU92Dbm4kN4ddkknE"));
-        transaction.addOutput(1222480000, Address.fromString("1CL9kj1seXif6agPfeh6vpKkzc2Hxq1UpM"));
-        transaction.addOutput(332000, Address.fromString("1B6ifpYaSvBkjJTf4W1tjYgDYajFua3NU8"));
-        transaction.addOutput(8993844, Address.fromString("3Pwp5u7PwgrMw3gAAyLAkDKYKRrFuFkneG"));
+        transaction.addOutput(833300, Address.fromString("M7yUAKC1uXehdKcSBWTUqrrAPSxWfKMgKr"));
+        transaction.addOutput(1222480000, Address.fromString("LWZ71wKhjBxiMPNYqngQCqPXCpPa1ecfuu"));
+        transaction.addOutput(332000, Address.fromString("LVKfw2rQXaRoz79pEe1C1Zjyko6Y6e4Wap"));
+        transaction.addOutput(8993844, Address.fromString("MW9xPnXMtohnjYx4GrKWZrZwe8ShsNkneA"));
 
         Assertions.assertEquals(spendingTransaction.getLength(), transaction.getLength());
 
@@ -350,9 +350,9 @@ public class TransactionTest {
         TransactionInput input = ScriptType.P2SH_P2WPKH.addSpendingInput(transaction, spent0Output, pubKey0, signature0);
         input.setSequenceNumber(TransactionInput.SEQUENCE_RBF_ENABLED);
 
-        transaction.addOutput(4000, Address.fromString("1LiQZqSwPqb615uyxDKTaN9Tg4CER98cgJ"));
-        transaction.addOutput(361206, Address.fromString("32B5Pv7Nvhh8iQ3Z2xK8cbKBW5f2bGMoqp"));
-        transaction.addOutput(27100, Address.fromString("3KzUpFMVKXiNETUy19VVW9Re5EimboDuyX"));
+        transaction.addOutput(4000, Address.fromString("LewMq3kmUVq9Ftc98MJkrPDDtGZWbUPT9y"));
+        transaction.addOutput(361206, Address.fromString("M8PDhoXLspYZWuKT8qJUSEZapnFUdCyHwf"));
+        transaction.addOutput(27100, Address.fromString("MSCd88mTGeZo2xks72UqKng3PwKDfatnhV"));
 
         Assertions.assertEquals(spendingTransaction.getLength(), transaction.getLength());
 
@@ -393,8 +393,8 @@ public class TransactionTest {
         transaction.setSegwitFlag(1);
         TransactionInput input = ScriptType.P2SH_P2WSH.addMultisigSpendingInput(transaction, spent0Output, 2, pubKeySignatures);
 
-        transaction.addOutput(59287429, Address.fromString("3PBjKH4FRuEKy4sD3NfL7tqfZTG5K42owu"));
-        transaction.addOutput(212571, Address.fromString("3KRUgU4XGuErXkjBtFhksPzTGJ4AMwF4jB"));
+        transaction.addOutput(59287429, Address.fromString("MVPsdAUDP25kma979FefwY64t9rXMJv4mF"));
+        transaction.addOutput(212571, Address.fromString("MRdczMUVE26HLG15z8h6h3ErazecKGP7GA"));
 
         Assertions.assertEquals(spendingTransaction.getLength(), transaction.getLength());
 
@@ -427,8 +427,8 @@ public class TransactionTest {
         transaction.setSegwitFlag(1);
         spent0ScriptType.addSpendingInput(transaction, spent0Output, key0, signature0);
 
-        transaction.addOutput(211584990, Address.fromString("bc1q9k6aan6ncahvlslw8w54jzv897k55zh077un6s"));
-        transaction.addOutput(1806203, Address.fromString("3QLFcgKFNzo262FYRFgGfrUNiUurpQbDZv"));
+        transaction.addOutput(211584990, Address.fromString("ltc1q9k6aan6ncahvlslw8w54jzv897k55zh06zxhzq"));
+        transaction.addOutput(1806203, Address.fromString("MWYPvZjDL7eStXXSX8fcVVin3BWJmWNKZB"));
 
         Assertions.assertEquals(spendingTransaction.getLength(), transaction.getLength());
 
@@ -469,9 +469,9 @@ public class TransactionTest {
         transaction.setSegwitFlag(1);
         spent0ScriptType.addMultisigSpendingInput(transaction, spent0Output, 2, pubKeySignatures);
 
-        transaction.addOutput(10900000, Address.fromString("3Dt17mpd8FDXBjP56rCD7a4Sx7wpL91uhn"));
-        transaction.addOutput(332500000, Address.fromString("1K6igqzm36x8jxRTavPhgWXLVcVZVDTGc9"));
-        transaction.addOutput(156694315, Address.fromString("bc1qwqdg6squsna38e46795at95yu9atm8azzmyvckulcc7kytlcckxswvvzej"));
+        transaction.addOutput(10900000, Address.fromString("ML69RfEb5N4wzEeyCjBYwDJrGpYGKTyeWd"));
+        transaction.addOutput(332500000, Address.fromString("LdKfx4Jb7mCBzm7cm4NzxXb6hprqfEzfGx"));
+        transaction.addOutput(156694315, Address.fromString("ltc1qwqdg6squsna38e46795at95yu9atm8azzmyvckulcc7kytlcckxsdgzjrh"));
 
         Assertions.assertEquals(spendingTransaction.getLength(), transaction.getLength());
 

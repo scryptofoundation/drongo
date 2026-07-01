@@ -26,20 +26,20 @@ public class ECKeyTest {
 
         WalletNode firstReceive = wallet.getNode(KeyPurpose.RECEIVE).getChildren().iterator().next();
         Address address = firstReceive.getAddress();
-        Assertions.assertEquals("14JmU9a7SzieZNEtBnsZo688rt3mGrw6hr", address.toString());
+        Assertions.assertEquals("LTFzBKDzJGf8S5rPkwLSo8TqxKuwc2cixw", address.toString());
         ECKey privKey = keystore.getKey(firstReceive);
 
         //1 attempt required for low R
         String signature1 = privKey.signMessage("Test2", ScriptType.P2PKH);
-        Assertions.assertEquals("IHra0jSywF1TjIJ5uf7IDECae438cr4o3VmG6Ri7hYlDL+pUEXyUfwLwpiAfUQVqQFLgs6OaX0KsoydpuwRI71o=", signature1);
+        Assertions.assertEquals("HwL/Xs/c+/doUk22zz00V4V/nofDRiWaWpqm355Bp1IzHaSFcyEk4lHv+Pdwch+wiGqAiFVQYjn8geKzQsi1r80=", signature1);
 
         //2 attempts required for low R
         String signature2 = privKey.signMessage("Test", ScriptType.P2PKH);
-        Assertions.assertEquals("IDgMx1ljPhLHlKUOwnO/jBIgK+K8n8mvDUDROzTgU8gOaPDMs+eYXJpNXXINUx5WpeV605p5uO6B3TzBVcvs478=", signature2);
+        Assertions.assertEquals("IECI/ahKgBJE7ylbY927HRsy2Y1VS+r8G81XyHfmCSAMOHMGX/ZA1lYnhFvY0qLuCHRk4T2IzFGfNiQwW4utLCY=", signature2);
 
         //3 attempts required for low R
         String signature3 = privKey.signMessage("Test1", ScriptType.P2PKH);
-        Assertions.assertEquals("IEt/v9K95YVFuRtRtWaabPVwWOFv1FSA/e874I8ABgYMbRyVvHhSwLFz0RZuO87ukxDd4TOsRdofQwMEA90LCgI=", signature3);
+        Assertions.assertEquals("Hzo3rn7aYE6MPzUBJKFvOLsv4ko+pzHmRt+jOgue5gtUKv/5v3EXRJ7L9dy1Ie8d04fkicHEySHq/J50bb93YAo=", signature3);
     }
 
     @Test
@@ -60,7 +60,7 @@ public class ECKeyTest {
         // https://github.com/bitcoin/bips/blob/9a30c28574e62e26da77f14e33eb698b81268887/bip-0341/wallet-test-vectors.json#L6C36-L6C100
         String internalPubKeyHex = "d6889cb081036e0faefa3a35157ad71086b123b2b144b649798b494c300a961d";
         String expectedTweakedPubKey = "53a1f6e454df1aa2776a2814a721372d6258050de330b3c6d10ee8f4e0dda343";
-        String expectedAddress = "bc1p2wsldez5mud2yam29q22wgfh9439spgduvct83k3pm50fcxa5dps59h4z5";
+        String expectedAddress = "ltc1p2wsldez5mud2yam29q22wgfh9439spgduvct83k3pm50fcxa5dpshpe9c3";
 
         ECKey internalPubKey = ECKey.fromPublicOnly(HexFormat.of().parseHex(internalPubKeyHex));
         ECKey tweakedOutputKey = internalPubKey.getTweakedOutputKey();

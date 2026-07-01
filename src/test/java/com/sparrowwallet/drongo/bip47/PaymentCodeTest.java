@@ -26,7 +26,7 @@ public class PaymentCodeTest {
     public void testNotificationAddress() throws InvalidPaymentCodeException, InvalidKeySpecException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException, MnemonicException {
         PaymentCode alicePaymentCode = new PaymentCode("PM8TJTLJbPRGxSbc8EJi42Wrr6QbNSaSSVJ5Y3E4pbCYiTHUskHg13935Ubb7q8tx9GVbh2UuRnBc3WSyJHhUrw8KhprKnn9eDznYGieTzFcwQRya4GA");
         Address aliceNotificationAddress = alicePaymentCode.getNotificationAddress();
-        Assertions.assertEquals("1JDdmqFLhpzcUwPeinhJbUPw4Co3aWLyzW", aliceNotificationAddress.toString());
+        Assertions.assertEquals("LcSb33ZAnVEfjk5otvgbsVThGRAKnKLSvt", aliceNotificationAddress.toString());
 
         ECKey alicePrivKey = DumpedPrivateKey.fromBase58("Kx983SRhAZpAhj7Aac1wUXMJ6XZeyJKqCxJJ49dxEbYCT4a1ozRD").getKey();
 
@@ -154,11 +154,11 @@ public class PaymentCodeTest {
 
         PaymentAddress paymentAddress0 = new PaymentAddress(paymentCodeBob, 0, privateKey.getPrivKeyBytes());
         ECKey sendKey0 = paymentAddress0.getSendECKey();
-        Assertions.assertEquals("141fi7TY3h936vRUKh1qfUZr8rSBuYbVBK", ScriptType.P2PKH.getAddress(sendKey0).toString());
+        Assertions.assertEquals("LNEcyKmN8MP6Mj7dVq18wVdcM4oU78Eh71", ScriptType.P2PKH.getAddress(sendKey0).toString());
 
         PaymentAddress paymentAddress1 = new PaymentAddress(paymentCodeBob, 1, privateKey.getPrivKeyBytes());
         ECKey sendKey1 = paymentAddress1.getSendECKey();
-        Assertions.assertEquals("12u3Uued2fuko2nY4SoSFGCoGLCBUGPkk6", ScriptType.P2PKH.getAddress(sendKey1).toString());
+        Assertions.assertEquals("LM7zk7xT7L9p3qUhEanjXHGZUYZTfhNCz3", ScriptType.P2PKH.getAddress(sendKey1).toString());
     }
 
     @Test
@@ -177,19 +177,19 @@ public class PaymentCodeTest {
 
         Assertions.assertEquals(aliceWallet.getPaymentCode(), aliceBip47Wallet.getPaymentCode());
         Assertions.assertEquals("PM8TJTLJbPRGxSbc8EJi42Wrr6QbNSaSSVJ5Y3E4pbCYiTHUskHg13935Ubb7q8tx9GVbh2UuRnBc3WSyJHhUrw8KhprKnn9eDznYGieTzFcwQRya4GA", paymentCodeAlice.toString());
-        Assertions.assertEquals("1JDdmqFLhpzcUwPeinhJbUPw4Co3aWLyzW", paymentCodeAlice.getNotificationAddress().toString());
+        Assertions.assertEquals("LcSb33ZAnVEfjk5otvgbsVThGRAKnKLSvt", paymentCodeAlice.getNotificationAddress().toString());
 
         WalletNode sendNode0 = aliceBip47Wallet.getFreshNode(KeyPurpose.SEND);
         Address address0 = sendNode0.getAddress();
-        Assertions.assertEquals("141fi7TY3h936vRUKh1qfUZr8rSBuYbVBK", address0.toString());
+        Assertions.assertEquals("LNEcyKmN8MP6Mj7dVq18wVdcM4oU78Eh71", address0.toString());
 
         WalletNode sendNode1 = aliceBip47Wallet.getFreshNode(KeyPurpose.SEND, sendNode0);
         Address address1 = sendNode1.getAddress();
-        Assertions.assertEquals("12u3Uued2fuko2nY4SoSFGCoGLCBUGPkk6", address1.toString());
+        Assertions.assertEquals("LM7zk7xT7L9p3qUhEanjXHGZUYZTfhNCz3", address1.toString());
 
         WalletNode sendNode2 = aliceBip47Wallet.getFreshNode(KeyPurpose.SEND, sendNode1);
         Address address2 = sendNode2.getAddress();
-        Assertions.assertEquals("1FsBVhT5dQutGwaPePTYMe5qvYqqjxyftc", address2.toString());
+        Assertions.assertEquals("La68kukui59wXkGYpXSqdf9c8mD7vXcxLD", address2.toString());
 
         DeterministicSeed bobSeed = new DeterministicSeed("reward upper indicate eight swift arch injury crystal super wrestle already dentist", "", 0, DeterministicSeed.Type.BIP39);
         Wallet bobWallet = new Wallet();
@@ -200,19 +200,19 @@ public class PaymentCodeTest {
 
         Wallet bobBip47Wallet = bobWallet.addChildWallet(paymentCodeAlice, ScriptType.P2PKH, "Bob");
         Assertions.assertEquals(paymentCodeBob.toString(), bobBip47Wallet.getKeystores().get(0).getPaymentCode().toString());
-        Assertions.assertEquals("1ChvUUvht2hUQufHBXF8NgLhW8SwE2ecGV", paymentCodeBob.getNotificationAddress().toString());
+        Assertions.assertEquals("LWvsjhEXxgwXfiMSMfERehQTiLpDKxPkrN", paymentCodeBob.getNotificationAddress().toString());
 
         WalletNode receiveNode0 = bobBip47Wallet.getFreshNode(KeyPurpose.RECEIVE);
         Address receiveAddress0 = receiveNode0.getAddress();
-        Assertions.assertEquals("141fi7TY3h936vRUKh1qfUZr8rSBuYbVBK", receiveAddress0.toString());
+        Assertions.assertEquals("LNEcyKmN8MP6Mj7dVq18wVdcM4oU78Eh71", receiveAddress0.toString());
 
         WalletNode receiveNode1 = bobBip47Wallet.getFreshNode(KeyPurpose.RECEIVE, receiveNode0);
         Address receiveAddress1 = receiveNode1.getAddress();
-        Assertions.assertEquals("12u3Uued2fuko2nY4SoSFGCoGLCBUGPkk6", receiveAddress1.toString());
+        Assertions.assertEquals("LM7zk7xT7L9p3qUhEanjXHGZUYZTfhNCz3", receiveAddress1.toString());
 
         WalletNode receiveNode2 = bobBip47Wallet.getFreshNode(KeyPurpose.RECEIVE, receiveNode1);
         Address receiveAddress2 = receiveNode2.getAddress();
-        Assertions.assertEquals("1FsBVhT5dQutGwaPePTYMe5qvYqqjxyftc", receiveAddress2.toString());
+        Assertions.assertEquals("La68kukui59wXkGYpXSqdf9c8mD7vXcxLD", receiveAddress2.toString());
 
         ECKey privKey0 = bobWallet.getKeystores().get(0).getKey(receiveNode0);
         ECKey pubKey0 = bobWallet.getKeystores().get(0).getPubKey(receiveNode0);

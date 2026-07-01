@@ -26,7 +26,7 @@ public class Bip322Test {
     public void signMessageBip322() {
         ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
         Address address = ScriptType.P2WPKH.getAddress(privKey);
-        Assertions.assertEquals("bc1q9vza2e8x573nczrlzms0wvx3gsqjx7vavgkx0l", address.toString());
+        Assertions.assertEquals("ltc1q9vza2e8x573nczrlzms0wvx3gsqjx7vag5vzh0", address.toString());
 
         String signature = Bip322.signMessageBip322(ScriptType.P2WPKH, "", privKey);
         Assertions.assertEquals("AkcwRAIgM2gBAQqvZX15ZiysmKmQpDrG83avLIT492QBzLnQIxYCIBaTpOaD20qRlEylyxFSeEA2ba9YOixpX8z46TSDtS40ASECx/EgAxlkQpQ9hYjgGu6EBCPMVPwVIVJqO4XCsMvViHI=", signature);
@@ -37,7 +37,7 @@ public class Bip322Test {
 
     @Test
     public void verifyMessageBip322Fail() throws InvalidAddressException, SignatureException {
-        Address address = Address.fromString("bc1q9vza2e8x573nczrlzms0wvx3gsqjx7vavgkx0l");
+        Address address = Address.fromString("ltc1q9vza2e8x573nczrlzms0wvx3gsqjx7vag5vzh0");
         String message1 = "";
         String signature2 = "AkcwRAIgZRfIY3p7/DoVTty6YZbWS71bc5Vct9p9Fia83eRmw2QCICK/ENGfwLtptFluMGs2KsqoNSk89pO7F29zJLUx9a/sASECx/EgAxlkQpQ9hYjgGu6EBCPMVPwVIVJqO4XCsMvViHI=";
 
@@ -46,7 +46,7 @@ public class Bip322Test {
 
     @Test
     public void verifyMessageBip322() throws InvalidAddressException, SignatureException {
-        Address address = Address.fromString("bc1q9vza2e8x573nczrlzms0wvx3gsqjx7vavgkx0l");
+        Address address = Address.fromString("ltc1q9vza2e8x573nczrlzms0wvx3gsqjx7vag5vzh0");
         String message1 = "";
         String signature1 = "AkcwRAIgM2gBAQqvZX15ZiysmKmQpDrG83avLIT492QBzLnQIxYCIBaTpOaD20qRlEylyxFSeEA2ba9YOixpX8z46TSDtS40ASECx/EgAxlkQpQ9hYjgGu6EBCPMVPwVIVJqO4XCsMvViHI=";
 
@@ -64,7 +64,7 @@ public class Bip322Test {
     public void signMessageBip322Taproot() {
         ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
         Address address = ScriptType.P2TR.getAddress(privKey);
-        Assertions.assertEquals("bc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5sxq8lt3", address.toString());
+        Assertions.assertEquals("ltc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5s9yf035", address.toString());
 
         String signature = Bip322.signMessageBip322(ScriptType.P2TR, "Hello World", privKey);
         Assertions.assertEquals("AUHd69PrJQEv+oKTfZ8l+WROBHuy9HKrbFCJu7U1iK2iiEy1vMU5EfMtjc+VSHM7aU0SDbak5IUZRVno2P5mjSafAQ==", signature);
@@ -74,7 +74,7 @@ public class Bip322Test {
     public void verifyMessageBip322Taproot() throws SignatureException {
         ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
         Address address = ScriptType.P2TR.getAddress(privKey);
-        Assertions.assertEquals("bc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5sxq8lt3", address.toString());
+        Assertions.assertEquals("ltc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5s9yf035", address.toString());
 
         String message1 = "Hello World";
         String signature1 = "AUHd69PrJQEv+oKTfZ8l+WROBHuy9HKrbFCJu7U1iK2iiEy1vMU5EfMtjc+VSHM7aU0SDbak5IUZRVno2P5mjSafAQ==";
@@ -86,7 +86,7 @@ public class Bip322Test {
     public void signMessageBip322NestedSegwit() {
         ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
         Address address = ScriptType.P2SH_P2WPKH.getAddress(privKey);
-        Assertions.assertEquals("37qyp7jQAzqb2rCBpMvVtLDuuzKAUCVnJb", address.toString());
+        Assertions.assertEquals("ME48819N87h1qMU5vEuqhyUKEgucUsEvZT", address.toString());
 
         Assertions.assertThrows(UnsupportedOperationException.class, () -> Bip322.signMessageBip322(ScriptType.P2SH_P2WPKH, "Hello World", privKey));
     }
@@ -95,7 +95,7 @@ public class Bip322Test {
     public void verifyMessageBip322NestedSegwit() throws SignatureException {
         ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
         Address address = ScriptType.P2SH_P2WPKH.getAddress(privKey);
-        Assertions.assertEquals("37qyp7jQAzqb2rCBpMvVtLDuuzKAUCVnJb", address.toString());
+        Assertions.assertEquals("ME48819N87h1qMU5vEuqhyUKEgucUsEvZT", address.toString());
 
         String message1 = "Hello World";
         String signature1 = "AkcwRAIgHx821fcP3D4R6RsXHF8kXza4d/SqpKGaGu++AEQjJz0CIH9cN5XGDkgkqqF9OMTbYvhgI7Yp9NoHXEgLstjqDOqDASECx/EgAxlkQpQ9hYjgGu6EBCPMVPwVIVJqO4XCsMvViHI=";
@@ -168,7 +168,7 @@ public class Bip322Test {
 
     @Test
     public void verifyMessageBip322Multisig() throws SignatureException, InvalidAddressException {
-        Address address = Address.fromString("bc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5sxq8lt3");
+        Address address = Address.fromString("ltc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5s9yf035");
 
         String message1 = "This will be a p2wsh 3-of-3 multisig BIP 322 signed message";
         String signature1 = "BQBIMEUCIQDQoXvGKLH58exuujBOta+7+GN7vi0lKwiQxzBpuNuXuAIgIE0XYQlFDOfxbegGYYzlf+tqegleAKE6SXYIa1U+uCcBRzBEAiATegywVl6GWrG9jJuPpNwtgHKyVYCX2yfuSSDRFATAaQIgTLlU6reLQsSIrQSF21z3PtUO2yAUseUWGZqRUIE7VKoBSDBFAiEAgxtpidsU0Z4u/+5RB9cyeQtoCW5NcreLJmWXZ8kXCZMCIBR1sXoEinhZE4CF9P9STGIcMvCuZjY6F5F0XTVLj9SjAWlTIQP3dyWvTZjUENWJowMWBsQrrXCUs20Gu5YF79CG5Ga0XSEDwqI5GVBOuFkFzQOGH5eTExSAj2Z/LDV/hbcvAPQdlJMhA17FuuJd+4wGuj+ZbVxEsFapTKAOwyhfw9qpch52JKxbU64=";
