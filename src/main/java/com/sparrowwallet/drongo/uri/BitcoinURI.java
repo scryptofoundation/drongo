@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.uri;
 
+import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.address.InvalidAddressException;
@@ -69,9 +70,21 @@ public class BitcoinURI {
     public static final String FIELD_PAYMENT_REQUEST_URL = "r";
     public static final String FIELD_PAYJOIN_URL = "pj";
     public static final String FIELD_PAYJOIN_OUTPUT_SUBSTITUTION = "pjos";
-    public static final String FIELD_SILENT_PAYMENTS_ADDRESS = Network.get().getSilentPaymentsAddressHrp();
+    /**
+     * The silent payments parameter name is the chain's silent payments HRP.
+     *
+     * Resolved per call rather than held in a static field: Coin and Network are mutable singletons, so
+     * a constant captures whatever happened to be configured when this class was loaded, and is null
+     * outright on chains without silent payments.
+     */
+    public static String getSilentPaymentsAddressField() {
+        return Network.get().getSilentPaymentsAddressHrp();
+    }
 
-    public static final String BITCOIN_SCHEME = "litecoin";
+    /** The BIP21 scheme for the active coin, e.g. "litecoin" or "dogecoin". */
+    public static String getUriScheme() {
+        return Coin.get().getUriScheme();
+    }
     private static final String ENCODED_SPACE_CHARACTER = "%20";
     private static final String AMPERSAND_SEPARATOR = "&";
     private static final String QUESTION_MARK_SEPARATOR = "?";
@@ -104,7 +117,7 @@ public class BitcoinURI {
         // URI is formed as  bitcoin:<address>?<query parameters>
         // blockchain.info generates URIs of non-BIP compliant form bitcoin://address?....
 
-        if (!BITCOIN_SCHEME.equalsIgnoreCase(uri.getScheme())) {
+        if (!getUriScheme().equalsIgnoreCase(uri.getScheme())) {
             throw new BitcoinURIParseException("Unsupported URI scheme: " + uri.getScheme());
         }
 
@@ -299,7 +312,7 @@ public class BitcoinURI {
      * @return The silent payments address in the URI, if provided
      */
     public final SilentPaymentAddress getSilentPaymentAddress() {
-        String address = (String)parameterMap.get(FIELD_SILENT_PAYMENTS_ADDRESS);
+        String address = (String)parameterMap.get(getSilentPaymentsAddressField());
         if(address != null) {
             try {
                 return SilentPaymentAddress.from(address);
@@ -355,7 +368,7 @@ public class BitcoinURI {
      */
     public static BitcoinURI fromAddress(Address address) {
         try {
-            return new BitcoinURI(BITCOIN_SCHEME + ":" + address.toString());
+            return new BitcoinURI(getUriScheme() + ":" + address.toString());
         } catch(BitcoinURIParseException e) {
             //Can't happen
             return null;
@@ -390,7 +403,7 @@ public class BitcoinURI {
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.append(BITCOIN_SCHEME).append(":").append(address);
+        builder.append(getUriScheme()).append(":").append(address);
 
         boolean questionMarkHasBeenOutput = false;
 

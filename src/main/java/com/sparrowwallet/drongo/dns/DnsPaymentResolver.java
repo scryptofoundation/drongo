@@ -20,13 +20,18 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
-import static com.sparrowwallet.drongo.uri.BitcoinURI.BITCOIN_SCHEME;
-
 public class DnsPaymentResolver {
     private static final Logger log = LoggerFactory.getLogger(DnsPaymentResolver.class);
 
-    private static final String BITCOIN_URI_PREFIX = BITCOIN_SCHEME + ":";
     private static final String DEFAULT_RESOLVER_IP_ADDRESS = "8.8.8.8";
+
+    /**
+     * Resolved per call rather than held in a static field, since the BIP21 scheme now varies by coin
+     * and a constant would capture whichever coin was configured at class-load time.
+     */
+    private static String bitcoinUriPrefix() {
+        return BitcoinURI.getUriScheme() + ":";
+    }
 
     static String ROOT = ". IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D\n" +
             ". IN DS 38696 8 2 683D2D0ACB8C9B712A1948B27F741219298D0A450D612C483AF444A4C0FB2B16";
@@ -176,11 +181,11 @@ public class DnsPaymentResolver {
                 TXTRecord txt = (TXTRecord)record;
                 List<String> strings = txt.getStrings();
                 log.debug("Found TXT records for " + domain + ": " + strings);
-                if(strings.isEmpty() || !strings.getFirst().startsWith(BITCOIN_URI_PREFIX)) {
+                if(strings.isEmpty() || !strings.getFirst().startsWith(bitcoinUriPrefix())) {
                     continue;
                 }
-                if(strings.getFirst().startsWith(BITCOIN_URI_PREFIX) && !uriBuilder.isEmpty()) {
-                    throw new DnsPaymentValidationException("Multiple TXT records found starting with " + BITCOIN_URI_PREFIX);
+                if(strings.getFirst().startsWith(bitcoinUriPrefix()) && !uriBuilder.isEmpty()) {
+                    throw new DnsPaymentValidationException("Multiple TXT records found starting with " + bitcoinUriPrefix());
                 }
                 for(String s : strings) {
                     uriBuilder.append(s);

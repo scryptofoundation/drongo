@@ -5,6 +5,8 @@ import com.sparrowwallet.drongo.address.InvalidAddressException;
 import com.sparrowwallet.drongo.address.P2PKHAddress;
 import com.sparrowwallet.drongo.address.P2SHAddress;
 import com.sparrowwallet.drongo.protocol.Base58;
+import com.sparrowwallet.drongo.uri.BitcoinURI;
+import com.sparrowwallet.drongo.uri.BitcoinURIParseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -172,6 +174,51 @@ public class CoinTest {
         //Bech32 permits uppercase, which the previous case-sensitive startsWith would have missed.
         Assertions.assertTrue(Network.get().hasBech32AddressPrefix("LTC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4"));
         Assertions.assertFalse(Network.get().hasBech32AddressPrefix("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080"));
+    }
+
+    @Test
+    public void testUriSchemesFollowTheActiveCoin() {
+        Assertions.assertEquals("litecoin", Coin.LITECOIN.getUriScheme());
+        Assertions.assertEquals("dogecoin", Coin.DOGECOIN.getUriScheme());
+        Assertions.assertEquals("pepecoin", Coin.PEPECOIN.getUriScheme());
+        Assertions.assertEquals("luckycoin", Coin.LUCKYCOIN.getUriScheme());
+
+        //Resolved per call, not captured in a static field at class-load time.
+        for(Coin coin : Coin.values()) {
+            Coin.set(coin);
+            Assertions.assertEquals(coin.getUriScheme(), BitcoinURI.getUriScheme(),
+                    "BitcoinURI scheme must track the active coin");
+        }
+    }
+
+    /**
+     * A BIP21 URI for one chain must not parse on another - the scheme is the only thing distinguishing
+     * them before the address is even read.
+     */
+    @Test
+    public void testUriSchemeFromAnotherCoinIsRejected() {
+        Coin.set(Coin.DOGECOIN);
+        Assertions.assertThrows(BitcoinURIParseException.class,
+                () -> new BitcoinURI("litecoin:LX1nHQxHRs5UbjXHTvyDLPnPPfNwYVaCLM"));
+
+        Coin.set(Coin.LITECOIN);
+        Assertions.assertThrows(BitcoinURIParseException.class,
+                () -> new BitcoinURI("dogecoin:DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L"));
+    }
+
+    /**
+     * The silent payments URI field is the chain's HRP, so it is absent on chains without the feature.
+     */
+    @Test
+    public void testSilentPaymentsUriFieldFollowsTheActiveCoin() {
+        Coin.set(Coin.LITECOIN);
+        Assertions.assertEquals("ltcsp", BitcoinURI.getSilentPaymentsAddressField());
+
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+            Coin.set(coin);
+            Assertions.assertNull(BitcoinURI.getSilentPaymentsAddressField(),
+                    coin + " has no silent payments HRP and so no URI field");
+        }
     }
 
     @Test

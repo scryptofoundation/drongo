@@ -135,6 +135,15 @@ public enum Coin {
     }
 
     /**
+     * The BIP21 URI scheme, e.g. "litecoin" for litecoin:LX1n... Each of these chains uses its own
+     * lowercase name as the scheme, so this tracks getName(), but the two are separate concepts and
+     * callers building or parsing URIs should use this.
+     */
+    public String getUriScheme() {
+        return name;
+    }
+
+    /**
      * SLIP-44 coin type for the BIP44 derivation path.
      *
      * Luckycoin is deliberately 0, not the registered 743/790: both shipping Luckycoin wallets derive
