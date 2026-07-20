@@ -92,14 +92,16 @@ public enum Coin {
     public ChainParams params(Network network) {
         return switch(this) {
             case LITECOIN -> switch(network) {
-                //Carried over verbatim from the pre-Coin Network enum, including the WIF byte below.
-                //Note: 128 (0x80) is Bitcoin's WIF prefix - Litecoin Core uses 176 (0xB0). Preserved
-                //as-is to avoid changing key import/export behaviour for existing Sparrow-LTC wallets;
-                //see the WIF question raised during the coin-axis work before altering it.
+                //WIF version bytes match Litecoin Core chainparams: SECRET_KEY 176 (0xB0) mainnet,
+                //239 (0xEF) testnet/regtest. The pre-Coin enum carried 128/191, which are Electrum-LTC's
+                //internal WIF_PREFIX base constants (0x80/0xbf) copied without the +48 script-type offset
+                //Electrum-LTC adds before emitting - so exported keys were 0x80-prefixed (valid Bitcoin
+                //WIFs, rejected by every Litecoin wallet), and standard 0xB0 Litecoin keys would not
+                //import. REGTEST already used the correct 239.
                 case MAINNET -> new ChainParams(48, "L", 50, "M", "ltc", "ltcsp", "ltcmweb",
-                        ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 128, 9332);
+                        ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 176, 9332);
                 case TESTNET -> new ChainParams(111, "mn", 58, "Q", "tltc", "tltcsp", "tmweb",
-                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 191, 19332);
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19332);
                 case REGTEST -> new ChainParams(111, "mn", 196, "2", "rltc", "rltcsp", "tmweb",
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19443);
                 case SIGNET -> new ChainParams(111, "mn", 196, "2", "tb", "tsp", "tmweb",

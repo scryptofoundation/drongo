@@ -1,33 +1,58 @@
 package com.sparrowwallet.drongo.crypto;
 
+import com.sparrowwallet.drongo.protocol.Base58;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.UnsupportedEncodingException;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 
+/**
+ * The canonical BIP38 test vectors. Expected results are the published <em>Bitcoin</em> WIF strings
+ * from the BIP38 spec; on this Litecoin fork the decrypted key's WIF uses Litecoin's version byte, so
+ * comparing the WIF strings directly would fail. Instead each vector's private key bytes and
+ * compression flag are compared, which is the coin-independent part BIP38 actually specifies - keeping
+ * the published spec values visible and making the tests independent of the WIF version byte.
+ */
 public class BIP38Test {
     @Test
     public void testNoCompressionNoEC() throws GeneralSecurityException, UnsupportedEncodingException {
-        Assertions.assertEquals("5KN7MzqK5wt2TP1fQCYyHBtDrXdJuXbUzm4A9rKAteGu3Qi5CVR", BIP38.decrypt("TestingOneTwoThree", "6PRVWUbkzzsbcVac2qwfssoUJAN1Xhrg6bNk8J7Nzm5H7kxEbn2Nh2ZoGg").toString()); ;
-        Assertions.assertEquals("5HtasZ6ofTHP6HCwTqTkLDuLQisYPah7aUnSKfC7h4hMUVw2gi5", BIP38.decrypt("Satoshi", "6PRNFFkZc2NZ6dJqFfhRoFNMR9Lnyj7dYGrzdgXXVMXcxoKTePPX1dWByq").toString()); ;
+        assertDecryptsTo("TestingOneTwoThree", "6PRVWUbkzzsbcVac2qwfssoUJAN1Xhrg6bNk8J7Nzm5H7kxEbn2Nh2ZoGg", "5KN7MzqK5wt2TP1fQCYyHBtDrXdJuXbUzm4A9rKAteGu3Qi5CVR");
+        assertDecryptsTo("Satoshi", "6PRNFFkZc2NZ6dJqFfhRoFNMR9Lnyj7dYGrzdgXXVMXcxoKTePPX1dWByq", "5HtasZ6ofTHP6HCwTqTkLDuLQisYPah7aUnSKfC7h4hMUVw2gi5");
     }
 
     @Test
     public void testCompressionNoEC() throws GeneralSecurityException, UnsupportedEncodingException {
-        Assertions.assertEquals("L44B5gGEpqEDRS9vVPz7QT35jcBG2r3CZwSwQ4fCewXAhAhqGVpP", BIP38.decrypt("TestingOneTwoThree", "6PYNKZ1EAgYgmQfmNVamxyXVWHzK5s6DGhwP4J5o44cvXdoY7sRzhtpUeo").toString()); ;
-        Assertions.assertEquals("KwYgW8gcxj1JWJXhPSu4Fqwzfhp5Yfi42mdYmMa4XqK7NJxXUSK7", BIP38.decrypt("Satoshi", "6PYLtMnXvfG3oJde97zRyLYFZCYizPU5T3LwgdYJz1fRhh16bU7u6PPmY7").toString()); ;
+        assertDecryptsTo("TestingOneTwoThree", "6PYNKZ1EAgYgmQfmNVamxyXVWHzK5s6DGhwP4J5o44cvXdoY7sRzhtpUeo", "L44B5gGEpqEDRS9vVPz7QT35jcBG2r3CZwSwQ4fCewXAhAhqGVpP");
+        assertDecryptsTo("Satoshi", "6PYLtMnXvfG3oJde97zRyLYFZCYizPU5T3LwgdYJz1fRhh16bU7u6PPmY7", "KwYgW8gcxj1JWJXhPSu4Fqwzfhp5Yfi42mdYmMa4XqK7NJxXUSK7");
     }
 
     @Test
     public void testCompressionEC() throws GeneralSecurityException, UnsupportedEncodingException {
-        Assertions.assertEquals("5K4caxezwjGCGfnoPTZ8tMcJBLB7Jvyjv4xxeacadhq8nLisLR2", BIP38.decrypt("TestingOneTwoThree", "6PfQu77ygVyJLZjfvMLyhLMQbYnu5uguoJJ4kMCLqWwPEdfpwANVS76gTX").toString()); ;
-        Assertions.assertEquals("5KJ51SgxWaAYR13zd9ReMhJpwrcX47xTJh2D3fGPG9CM8vkv5sH", BIP38.decrypt("Satoshi", "6PfLGnQs6VZnrNpmVKfjotbnQuaJK4KZoPFrAjx1JMJUa1Ft8gnf5WxfKd").toString()); ;
+        assertDecryptsTo("TestingOneTwoThree", "6PfQu77ygVyJLZjfvMLyhLMQbYnu5uguoJJ4kMCLqWwPEdfpwANVS76gTX", "5K4caxezwjGCGfnoPTZ8tMcJBLB7Jvyjv4xxeacadhq8nLisLR2");
+        assertDecryptsTo("Satoshi", "6PfLGnQs6VZnrNpmVKfjotbnQuaJK4KZoPFrAjx1JMJUa1Ft8gnf5WxfKd", "5KJ51SgxWaAYR13zd9ReMhJpwrcX47xTJh2D3fGPG9CM8vkv5sH");
     }
 
     @Test
     public void testCompressionECLot() throws GeneralSecurityException, UnsupportedEncodingException {
-        Assertions.assertEquals("5JLdxTtcTHcfYcmJsNVy1v2PMDx432JPoYcBTVVRHpPaxUrdtf8", BIP38.decrypt("MOLON LABE", "6PgNBNNzDkKdhkT6uJntUXwwzQV8Rr2tZcbkDcuC9DZRsS6AtHts4Ypo1j").toString()); ;
-        Assertions.assertEquals("5KMKKuUmAkiNbA3DazMQiLfDq47qs8MAEThm4yL8R2PhV1ov33D", BIP38.decrypt("ΜΟΛΩΝ ΛΑΒΕ", "6PgGWtx25kUg8QWvwuJAgorN6k9FbE25rv5dMRwu5SKMnfpfVe5mar2ngH").toString()); ;
+        assertDecryptsTo("MOLON LABE", "6PgNBNNzDkKdhkT6uJntUXwwzQV8Rr2tZcbkDcuC9DZRsS6AtHts4Ypo1j", "5JLdxTtcTHcfYcmJsNVy1v2PMDx432JPoYcBTVVRHpPaxUrdtf8");
+        assertDecryptsTo("ΜΟΛΩΝ ΛΑΒΕ", "6PgGWtx25kUg8QWvwuJAgorN6k9FbE25rv5dMRwu5SKMnfpfVe5mar2ngH", "5KMKKuUmAkiNbA3DazMQiLfDq47qs8MAEThm4yL8R2PhV1ov33D");
+    }
+
+    private void assertDecryptsTo(String passphrase, String encrypted, String expectedBitcoinWif) throws GeneralSecurityException, UnsupportedEncodingException {
+        DumpedPrivateKey decrypted = BIP38.decrypt(passphrase, encrypted);
+
+        //Decode the published Bitcoin WIF directly (its 0x80 version no longer matches the network, so
+        //DumpedPrivateKey would reject it): [version][32 key][optional 0x01 compression marker].
+        byte[] decoded = Base58.decodeChecked(expectedBitcoinWif);
+        boolean expectedCompressed = decoded.length == 34;
+        byte[] expectedPrivateKey = Arrays.copyOfRange(decoded, 1, 33);
+
+        //Re-encode the published key with this network's WIF byte and compare, so the assertion checks
+        //key material and compression while staying independent of the version byte. Both sides go
+        //through the same DumpedPrivateKey encoding as BIP38.decrypt, so a match means identical key.
+        String expectedWif = ECKey.fromPrivate(expectedPrivateKey, expectedCompressed).getPrivateKeyEncoded().toString();
+        Assertions.assertEquals(expectedWif, decrypted.toString(), "decrypted key for " + expectedBitcoinWif);
     }
 }

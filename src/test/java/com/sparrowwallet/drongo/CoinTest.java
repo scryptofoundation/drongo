@@ -4,6 +4,8 @@ import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.address.InvalidAddressException;
 import com.sparrowwallet.drongo.address.P2PKHAddress;
 import com.sparrowwallet.drongo.address.P2SHAddress;
+import com.sparrowwallet.drongo.crypto.DumpedPrivateKey;
+import com.sparrowwallet.drongo.crypto.ECKey;
 import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.protocol.Base58;
 import com.sparrowwallet.drongo.protocol.ScriptType;
@@ -371,12 +373,34 @@ public class CoinTest {
         Assertions.assertEquals(50, mainnet.p2shAddressHeader());
         Assertions.assertEquals("ltc", mainnet.bech32AddressHrp());
         Assertions.assertEquals("ltcmweb", mainnet.mwebAddressHrp());
-        //128 is Bitcoin's WIF prefix; Litecoin Core uses 176. Preserved deliberately - see Coin.java.
-        Assertions.assertEquals(128, mainnet.dumpedPrivateKeyHeader());
+        //Litecoin Core SECRET_KEY: 176 mainnet, 239 testnet/regtest. Not Bitcoin's 128/191.
+        Assertions.assertEquals(176, mainnet.dumpedPrivateKeyHeader());
 
         Coin.ChainParams testnet = Coin.LITECOIN.params(Network.TESTNET);
         Assertions.assertEquals(111, testnet.p2pkhAddressHeader());
         Assertions.assertEquals(58, testnet.p2shAddressHeader());
         Assertions.assertEquals("tltc", testnet.bech32AddressHrp());
+        Assertions.assertEquals(239, testnet.dumpedPrivateKeyHeader());
+    }
+
+    /**
+     * A WIF key exported from Litecoin must import into the Litecoin ecosystem, and a standard Litecoin
+     * WIF must import here. Litecoin Core uses 176, which produces "T" (compressed) or "6" (uncompressed)
+     * leading characters - not Bitcoin's "L"/"K" from 128. This is the regression that stranded exported
+     * keys and rejected imported ones.
+     */
+    @Test
+    public void testLitecoinWifPrefix() {
+        Coin.set(Coin.LITECOIN);
+        byte[] privateKey = Utils.hexToBytes("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20");
+        ECKey key = ECKey.fromPrivate(privateKey);
+
+        String wif = key.getPrivateKeyEncoded().toBase58();
+        Assertions.assertTrue(wif.startsWith("T"),
+                "Litecoin compressed WIF should lead with T, was " + wif.charAt(0));
+
+        //Round-trips through the decoder, which enforces the same version byte.
+        Assertions.assertEquals(key.getPrivKey(),
+                DumpedPrivateKey.fromBase58(wif).getKey().getPrivKey());
     }
 }

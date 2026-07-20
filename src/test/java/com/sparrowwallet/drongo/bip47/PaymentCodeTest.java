@@ -28,7 +28,7 @@ public class PaymentCodeTest {
         Address aliceNotificationAddress = alicePaymentCode.getNotificationAddress();
         Assertions.assertEquals("LcSb33ZAnVEfjk5otvgbsVThGRAKnKLSvt", aliceNotificationAddress.toString());
 
-        ECKey alicePrivKey = DumpedPrivateKey.fromBase58("Kx983SRhAZpAhj7Aac1wUXMJ6XZeyJKqCxJJ49dxEbYCT4a1ozRD").getKey();
+        ECKey alicePrivKey = DumpedPrivateKey.fromBase58("T3yPVBisZwnmUZk38Exogstg3PCy3PLj2ACYuxGVoZiMxxB46Yop").getKey();
 
         byte[] alicePayload = alicePaymentCode.getPayload();
         Assertions.assertEquals("010002b85034fb08a8bfefd22848238257b252721454bbbfba2c3667f168837ea2cdad671af9f65904632e2dcc0c6ad314e11d53fc82fa4c4ea27a4a14eccecc478fee00000000000000000000000000", Utils.bytesToHex(alicePayload));

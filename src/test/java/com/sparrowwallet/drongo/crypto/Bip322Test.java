@@ -24,7 +24,7 @@ public class Bip322Test {
 
     @Test
     public void signMessageBip322() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2WPKH.getAddress(privKey);
         Assertions.assertEquals("ltc1q9vza2e8x573nczrlzms0wvx3gsqjx7vag5vzh0", address.toString());
 
@@ -62,7 +62,7 @@ public class Bip322Test {
 
     @Test
     public void signMessageBip322Taproot() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2TR.getAddress(privKey);
         Assertions.assertEquals("ltc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5s9yf035", address.toString());
 
@@ -72,7 +72,7 @@ public class Bip322Test {
 
     @Test
     public void verifyMessageBip322Taproot() throws SignatureException {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2TR.getAddress(privKey);
         Assertions.assertEquals("ltc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5s9yf035", address.toString());
 
@@ -84,7 +84,7 @@ public class Bip322Test {
 
     @Test
     public void signMessageBip322NestedSegwit() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2SH_P2WPKH.getAddress(privKey);
         Assertions.assertEquals("ME48819N87h1qMU5vEuqhyUKEgucUsEvZT", address.toString());
 
@@ -93,7 +93,7 @@ public class Bip322Test {
 
     @Test
     public void verifyMessageBip322NestedSegwit() throws SignatureException {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2SH_P2WPKH.getAddress(privKey);
         Assertions.assertEquals("ME48819N87h1qMU5vEuqhyUKEgucUsEvZT", address.toString());
 
@@ -105,7 +105,7 @@ public class Bip322Test {
 
     @Test
     public void getBip322Psbt() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2WPKH.getAddress(privKey);
 
         PSBT psbt = Bip322.getBip322Psbt(ScriptType.P2WPKH, address, "Hello World");
@@ -118,7 +118,7 @@ public class Bip322Test {
 
     @Test
     public void getBip322PsbtTaproot() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2TR.getAddress(privKey);
 
         PSBT psbt = Bip322.getBip322Psbt(ScriptType.P2TR, address, "Hello World");
@@ -130,7 +130,7 @@ public class Bip322Test {
 
     @Test
     public void getBip322SignatureFromPsbt() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         ECKey pubKey = ECKey.fromPublicOnly(privKey);
         Address address = ScriptType.P2WPKH.getAddress(privKey);
 
@@ -144,7 +144,7 @@ public class Bip322Test {
 
     @Test
     public void getBip322SignatureFromPsbtTaproot() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         ECKey pubKey = ECKey.fromPublicOnly(privKey);
         Address address = ScriptType.P2TR.getAddress(privKey);
 
@@ -158,7 +158,7 @@ public class Bip322Test {
 
     @Test
     public void getBip322SignatureFromUnsignedPsbt() {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         ECKey pubKey = ECKey.fromPublicOnly(privKey);
         Address address = ScriptType.P2WPKH.getAddress(privKey);
 
