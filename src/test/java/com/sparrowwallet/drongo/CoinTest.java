@@ -132,6 +132,48 @@ public class CoinTest {
         }
     }
 
+    /**
+     * Chains without segwit or MWEB have null HRPs. Address parsing must reject these inputs as
+     * invalid rather than dereferencing the null HRP - the prefix checks sit outside the try block in
+     * Address.fromString, so a NullPointerException there escapes instead of being reported.
+     */
+    @Test
+    public void testNullHrpChainsRejectRatherThanCrash() {
+        String[] candidates = {
+                "ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+                "ltcmweb1qqf9c2vqx6z0lxs2m2p3n6uqv0kcqz9h",
+                "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080",
+                "not an address",
+                ""
+        };
+
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+            Coin.set(coin);
+            Assertions.assertNull(Network.get().getBech32AddressHRP(), coin + " should have no bech32 HRP");
+
+            for(String candidate : candidates) {
+                Assertions.assertFalse(Network.get().hasBech32AddressPrefix(candidate));
+                Assertions.assertFalse(Network.get().hasMwebAddressPrefix(candidate));
+                Assertions.assertFalse(Network.get().hasSilentPaymentsAddressPrefix(candidate));
+                Assertions.assertThrows(InvalidAddressException.class, () -> Address.fromString(candidate),
+                        coin + " must reject \"" + candidate + "\" as invalid, not crash on a null HRP");
+            }
+        }
+    }
+
+    /**
+     * The null-safe prefix helpers must not have broken segwit or MWEB recognition on Litecoin.
+     */
+    @Test
+    public void testLitecoinStillRecognisesBech32AndMweb() {
+        Coin.set(Coin.LITECOIN);
+        Assertions.assertTrue(Network.get().hasBech32AddressPrefix("ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"));
+        Assertions.assertTrue(Network.get().hasMwebAddressPrefix("ltcmweb1qqf9c2vqx6z0lxs2m2p3n6uqv0kcqz9h"));
+        //Bech32 permits uppercase, which the previous case-sensitive startsWith would have missed.
+        Assertions.assertTrue(Network.get().hasBech32AddressPrefix("LTC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4"));
+        Assertions.assertFalse(Network.get().hasBech32AddressPrefix("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080"));
+    }
+
     @Test
     public void testExtendedKeyHeaders() {
         //Dogecoin and Pepecoin serialise as dgub/dgpv; Luckycoin uses Bitcoin's standard xpub/xprv.
@@ -191,6 +233,38 @@ public class CoinTest {
                 Assertions.assertThrows(IllegalStateException.class, () -> coin.params(network),
                         coin + " on " + network + " must throw rather than guess parameters");
             }
+        }
+    }
+
+    /**
+     * supports() is what cross-network callers filter on, so it must agree exactly with whether
+     * params() succeeds. If the two drift, a caller either probes a network that throws or skips one
+     * that would have worked.
+     */
+    @Test
+    public void testSupportsAgreesWithParams() {
+        for(Coin coin : Coin.values()) {
+            for(Network network : Network.values()) {
+                boolean paramsResolved;
+                try {
+                    coin.params(network);
+                    paramsResolved = true;
+                } catch(IllegalStateException e) {
+                    paramsResolved = false;
+                }
+
+                Assertions.assertEquals(paramsResolved, coin.supports(network),
+                        coin + " supports(" + network + ") disagrees with whether params() resolves");
+            }
+        }
+    }
+
+    @Test
+    public void testSupportedCanonicalValues() {
+        Assertions.assertArrayEquals(Network.canonicalValues(), Coin.LITECOIN.supportedCanonicalValues());
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+            Assertions.assertArrayEquals(new Network[]{Network.MAINNET}, coin.supportedCanonicalValues(),
+                    coin + " should expose only mainnet until other networks are verified");
         }
     }
 

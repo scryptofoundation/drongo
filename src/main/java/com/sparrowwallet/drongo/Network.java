@@ -97,6 +97,27 @@ public enum Network {
         return hasAddressPrefix(address, params().p2shAddressPrefix());
     }
 
+    public boolean hasBech32AddressPrefix(String address) {
+        return hasHrpPrefix(address, params().bech32AddressHrp());
+    }
+
+    public boolean hasMwebAddressPrefix(String address) {
+        return hasHrpPrefix(address, params().mwebAddressHrp());
+    }
+
+    public boolean hasSilentPaymentsAddressPrefix(String address) {
+        return hasHrpPrefix(address, params().spAddressHrp());
+    }
+
+    /**
+     * False when the chain has no such address type at all. Dogecoin, Pepecoin and Luckycoin have
+     * neither segwit nor MWEB, so their HRPs are null and no address can carry one - callers must not
+     * dereference the HRP directly.
+     */
+    private static boolean hasHrpPrefix(String address, String hrp) {
+        return hrp != null && address != null && address.toLowerCase(Locale.ROOT).startsWith(hrp);
+    }
+
     /**
      * A prefix of more than one character enumerates alternatives, not a literal prefix - a single
      * address version byte can encode to different leading characters depending on the hash that

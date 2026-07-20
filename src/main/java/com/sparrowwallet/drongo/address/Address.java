@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.address;
 
+import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.protocol.Base58;
 import com.sparrowwallet.drongo.protocol.Bech32;
@@ -70,7 +71,7 @@ public abstract class Address {
         try {
             return fromString(Network.get(), address);
         } catch(InvalidAddressException e) {
-            for(Network network : Network.canonicalValues()) {
+            for(Network network : Coin.get().supportedCanonicalValues()) {
                 try {
                     fromString(network, address);
                     if(network != Network.getCanonical()) {
@@ -107,7 +108,7 @@ public abstract class Address {
                 }
             }
 
-            if(address.toLowerCase(Locale.ROOT).startsWith(network.getBech32AddressHRP())) {
+            if(network.hasBech32AddressPrefix(address)) {
                 try {
                     Bech32.Bech32Data data = Bech32.decode(address);
                     if(data.hrp.equals(network.getBech32AddressHRP())) {
@@ -144,7 +145,7 @@ public abstract class Address {
                 }
             }
 
-            if(address.toLowerCase(Locale.ROOT).startsWith(network.getMwebAddressHrp())) {
+            if(network.hasMwebAddressPrefix(address)) {
                 try {
                     Bech32.Bech32Data data = Bech32.decode(address);
                     if(data.hrp.equals(network.getMwebAddressHrp())) {

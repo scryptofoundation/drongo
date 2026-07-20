@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo;
 
+import java.util.Arrays;
 import java.util.Locale;
 
 /**
@@ -38,6 +39,26 @@ public enum Coin {
         this.auxPow = auxPow;
         this.segwit = segwit;
         this.mweb = mweb;
+    }
+
+    /**
+     * Whether verified parameters exist for this coin on the given network.
+     *
+     * Callers that probe across networks - such as Address.fromString working out whether an address
+     * belongs to a different network than the configured one - must filter on this rather than calling
+     * params() and catching. Support is statically known, so it should not be discovered by exception.
+     */
+    public boolean supports(Network network) {
+        return switch(this) {
+            case LITECOIN -> true;
+            //Only mainnet parameters have been verified for the merge-mined chains so far.
+            case DOGECOIN, PEPECOIN, LUCKYCOIN -> network == Network.MAINNET;
+        };
+    }
+
+    /** The canonical networks this coin has verified parameters for. */
+    public Network[] supportedCanonicalValues() {
+        return Arrays.stream(Network.canonicalValues()).filter(this::supports).toArray(Network[]::new);
     }
 
     /**

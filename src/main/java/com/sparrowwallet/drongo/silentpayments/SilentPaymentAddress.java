@@ -29,7 +29,20 @@ public class SilentPaymentAddress {
 
     public String getAddress() {
         byte[] keys = Utils.concat(scanAddress.getPubKey(), spendAddress.getPubKey());
-        return Bech32.encode(Network.get().getSilentPaymentsAddressHrp(), VERSION, Bech32.Encoding.BECH32M, keys);
+        return Bech32.encode(requireSilentPaymentsHrp(), VERSION, Bech32.Encoding.BECH32M, keys);
+    }
+
+    /**
+     * Chains without silent payments support have no HRP to encode against. Fail with the reason
+     * rather than dereferencing null.
+     */
+    private static String requireSilentPaymentsHrp() {
+        String hrp = Network.get().getSilentPaymentsAddressHrp();
+        if(hrp == null) {
+            throw new UnsupportedOperationException("Silent payments are not supported on this chain");
+        }
+
+        return hrp;
     }
 
     public static SilentPaymentAddress from(String address) {
@@ -38,7 +51,7 @@ public class SilentPaymentAddress {
             throw new IllegalArgumentException("Invalid silent payments address encoding");
         }
 
-        if(!Network.get().getSilentPaymentsAddressHrp().equals(data.hrp)) {
+        if(!requireSilentPaymentsHrp().equals(data.hrp)) {
             throw new IllegalArgumentException("Invalid silent payments address hrp");
         }
 
