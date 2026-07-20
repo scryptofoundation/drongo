@@ -157,6 +157,11 @@ public class ExtendedKey {
         zprv("zprv", 0x04b2430c, ScriptType.P2WPKH, true, true),
         zpub("zpub", 0x04B24746, ScriptType.P2WPKH, false, true),
         Ltub("Ltub", 0x019da462, ScriptType.P2WPKH, false, true),
+        //Dogecoin extended key headers, inherited unchanged by Pepecoin. Defined by Dogecoin Core, but
+        //much of the ecosystem serialises Dogecoin keys as standard xprv/xpub instead - both are accepted
+        //on import. P2PKH as neither chain has segwit.
+        dgpv("dgpv", 0x02fac398, ScriptType.P2PKH, true, true),
+        dgub("dgub", 0x02facafd, ScriptType.P2PKH, false, true),
         //Litecoin MWEB extended key headers as used by Electrum-LTC (mprv/mpub) - required to import an MWEB keystore
         mprv("mprv", 0x03a3f988, ScriptType.MWEB, true, true),
         mpub("mpub", 0x03a3fdc2, ScriptType.MWEB, false, true),

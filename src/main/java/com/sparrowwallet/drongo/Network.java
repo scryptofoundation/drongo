@@ -2,49 +2,37 @@ package com.sparrowwallet.drongo;
 
 import java.util.Locale;
 
+/**
+ * The network axis: which network of the active {@link Coin} the application is running against.
+ *
+ * Chain constants (address headers, key prefixes, ports) live on Coin and are resolved here at call
+ * time, so this enum's public API is unchanged from before the coin axis was introduced.
+ */
 public enum Network {
-    MAINNET("mainnet", "Mainnet", "mainnet", 48, "L", 50, "M", "ltc", "ltcsp", "ltcmweb", ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 128, 9332),
-    TESTNET("testnet", "Testnet", "testnet", 111, "mn", 58, "Q", "tltc", "tltcsp", "tmweb", ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 191, 19332),
-    REGTEST("regtest", "Regtest", "regtest", 111, "mn", 196, "2", "rltc", "rltcsp", "tmweb", ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19443),
-    SIGNET("signet", "Signet", "signet", 111, "mn", 196, "2", "tb", "tsp", "tmweb", ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 38332),
-    TESTNET4("testnet4", "Testnet4", "testnet4", 111, "mn", 196, "2", "tb", "tsp", "tmweb", ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 48332);
+    MAINNET("mainnet", "Mainnet", "mainnet"),
+    TESTNET("testnet", "Testnet", "testnet"),
+    REGTEST("regtest", "Regtest", "regtest"),
+    SIGNET("signet", "Signet", "signet"),
+    TESTNET4("testnet4", "Testnet4", "testnet4");
 
     public static final String BLOCK_HEIGHT_PROPERTY = "com.sparrowwallet.blockHeight";
     private static final Network[] CANONICAL_VALUES = new Network[]{MAINNET, TESTNET, REGTEST, SIGNET};
 
-    Network(String name, String displayName, String home, int p2pkhAddressHeader, String p2pkhAddressPrefix, int p2shAddressHeader, String p2shAddressPrefix, String bech32AddressHrp, String spAddressHrp, String mwebAddressHrp, ExtendedKey.Header xprvHeader, ExtendedKey.Header xpubHeader, int dumpedPrivateKeyHeader, int defaultPort) {
+    Network(String name, String displayName, String home) {
         this.name = name;
         this.displayName = displayName;
         this.home = home;
-        this.p2pkhAddressHeader = p2pkhAddressHeader;
-        this.p2pkhAddressPrefix = p2pkhAddressPrefix;
-        this.p2shAddressHeader = p2shAddressHeader;
-        this.p2shAddressPrefix = p2shAddressPrefix;
-        this.bech32AddressHrp = bech32AddressHrp;
-        this.spAddressHrp = spAddressHrp;
-        this.mwebAddressHrp = mwebAddressHrp;
-        this.xprvHeader = xprvHeader;
-        this.xpubHeader = xpubHeader;
-        this.dumpedPrivateKeyHeader = dumpedPrivateKeyHeader;
-        this.defaultPort = defaultPort;
     }
 
     private final String name;
     private final String displayName;
     private final String home;
-    private final int p2pkhAddressHeader;
-    private final String p2pkhAddressPrefix;
-    private final int p2shAddressHeader;
-    private final String p2shAddressPrefix;
-    private final String bech32AddressHrp;
-    private final String spAddressHrp;
-    private final String mwebAddressHrp;
-    private final ExtendedKey.Header xprvHeader;
-    private final ExtendedKey.Header xpubHeader;
-    private final int dumpedPrivateKeyHeader;
-    private final int defaultPort;
 
     private static Network currentNetwork;
+
+    private Coin.ChainParams params() {
+        return Coin.get().params(this);
+    }
 
     public String getName() {
         return name;
@@ -63,53 +51,69 @@ public enum Network {
     }
 
     public int getP2PKHAddressHeader() {
-        return p2pkhAddressHeader;
+        return params().p2pkhAddressHeader();
     }
 
     public int getP2SHAddressHeader() {
-        return p2shAddressHeader;
+        return params().p2shAddressHeader();
     }
 
+    /** Null on chains without segwit (Dogecoin, Pepecoin, Luckycoin). */
     public String getBech32AddressHRP() {
-        return bech32AddressHrp;
+        return params().bech32AddressHrp();
     }
 
+    /** Null on chains without silent payments support. */
     public String getSilentPaymentsAddressHrp() {
-        return spAddressHrp;
+        return params().spAddressHrp();
     }
 
+    /** Null on chains without MWEB (everything except Litecoin). */
     public String getMwebAddressHrp() {
-        return mwebAddressHrp;
+        return params().mwebAddressHrp();
     }
 
     public ExtendedKey.Header getXprvHeader() {
-        return xprvHeader;
+        return params().xprvHeader();
     }
 
     public ExtendedKey.Header getXpubHeader() {
-        return xpubHeader;
+        return params().xpubHeader();
     }
 
     public int getDumpedPrivateKeyHeader() {
-        return dumpedPrivateKeyHeader;
+        return params().dumpedPrivateKeyHeader();
     }
 
     public int getDefaultPort() {
-        return defaultPort;
+        return params().defaultPort();
     }
 
     public boolean hasP2PKHAddressPrefix(String address) {
-        for(String prefix : p2pkhAddressPrefix.split("")) {
+        return hasAddressPrefix(address, params().p2pkhAddressPrefix());
+    }
+
+    public boolean hasP2SHAddressPrefix(String address) {
+        return hasAddressPrefix(address, params().p2shAddressPrefix());
+    }
+
+    /**
+     * A prefix of more than one character enumerates alternatives, not a literal prefix - a single
+     * address version byte can encode to different leading characters depending on the hash that
+     * follows it (Litecoin testnet P2PKH is "m" or "n"; Dogecoin P2SH is "9" or "A").
+     */
+    private static boolean hasAddressPrefix(String address, String prefixes) {
+        if(prefixes == null) {
+            return false;
+        }
+
+        for(String prefix : prefixes.split("")) {
             if(address.startsWith(prefix)) {
                 return true;
             }
         }
 
         return false;
-    }
-
-    public boolean hasP2SHAddressPrefix(String address) {
-        return address.startsWith(p2shAddressPrefix);
     }
 
     public static Network get() {
