@@ -118,6 +118,8 @@ public class CoinTest {
         assertPrefixMatchesEncoding(Coin.DOGECOIN, 30, false);
         assertPrefixMatchesEncoding(Coin.PEPECOIN, 56, false);
         assertPrefixMatchesEncoding(Coin.LUCKYCOIN, 47, false);
+        assertPrefixMatchesEncoding(Coin.BELLSCOIN, 25, false);
+        assertPrefixMatchesEncoding(Coin.DINGOCOIN, 30, false);
     }
 
     @Test
@@ -126,6 +128,8 @@ public class CoinTest {
         assertPrefixMatchesEncoding(Coin.DOGECOIN, 22, true);
         assertPrefixMatchesEncoding(Coin.PEPECOIN, 22, true);
         assertPrefixMatchesEncoding(Coin.LUCKYCOIN, 5, true);
+        assertPrefixMatchesEncoding(Coin.BELLSCOIN, 30, true);
+        assertPrefixMatchesEncoding(Coin.DINGOCOIN, 22, true);
     }
 
     @Test
@@ -153,7 +157,7 @@ public class CoinTest {
                 ""
         };
 
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Coin.set(coin);
             Assertions.assertNull(Network.get().getBech32AddressHRP(), coin + " should have no bech32 HRP");
 
@@ -186,6 +190,8 @@ public class CoinTest {
         Assertions.assertEquals("dogecoin", Coin.DOGECOIN.getUriScheme());
         Assertions.assertEquals("pepecoin", Coin.PEPECOIN.getUriScheme());
         Assertions.assertEquals("luckycoin", Coin.LUCKYCOIN.getUriScheme());
+        Assertions.assertEquals("bellscoin", Coin.BELLSCOIN.getUriScheme());
+        Assertions.assertEquals("dingocoin", Coin.DINGOCOIN.getUriScheme());
 
         //Resolved per call, not captured in a static field at class-load time.
         for(Coin coin : Coin.values()) {
@@ -218,7 +224,7 @@ public class CoinTest {
         Coin.set(Coin.LITECOIN);
         Assertions.assertEquals("ltcsp", BitcoinURI.getSilentPaymentsAddressField());
 
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Coin.set(coin);
             Assertions.assertNull(BitcoinURI.getSilentPaymentsAddressField(),
                     coin + " has no silent payments HRP and so no URI field");
@@ -232,7 +238,7 @@ public class CoinTest {
             Assertions.assertTrue(Coin.LITECOIN.supports(scriptType), "Litecoin should still support " + scriptType);
         }
 
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             //Legacy types work on every chain.
             Assertions.assertTrue(coin.supports(ScriptType.P2PKH));
             Assertions.assertTrue(coin.supports(ScriptType.P2SH));
@@ -258,7 +264,7 @@ public class CoinTest {
         List<ScriptType> litecoinTypes = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE);
         Assertions.assertTrue(litecoinTypes.contains(ScriptType.P2WPKH), "Litecoin should still offer segwit");
 
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Coin.set(coin);
             List<ScriptType> types = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE);
             Assertions.assertFalse(types.isEmpty(), coin + " must still offer legacy script types");
@@ -279,6 +285,9 @@ public class CoinTest {
         Assertions.assertEquals(ExtendedKey.Header.dgpv, Coin.DOGECOIN.params(Network.MAINNET).xprvHeader());
         Assertions.assertEquals(ExtendedKey.Header.dgub, Coin.PEPECOIN.params(Network.MAINNET).xpubHeader());
         Assertions.assertEquals(ExtendedKey.Header.xpub, Coin.LUCKYCOIN.params(Network.MAINNET).xpubHeader());
+        //Bellscoin and Dingocoin both inherit Dogecoin's dgub/dgpv.
+        Assertions.assertEquals(ExtendedKey.Header.dgub, Coin.BELLSCOIN.params(Network.MAINNET).xpubHeader());
+        Assertions.assertEquals(ExtendedKey.Header.dgub, Coin.DINGOCOIN.params(Network.MAINNET).xpubHeader());
 
         Assertions.assertEquals(0x02facafd, ExtendedKey.Header.dgub.getHeader());
         Assertions.assertEquals(0x02fac398, ExtendedKey.Header.dgpv.getHeader());
@@ -292,6 +301,9 @@ public class CoinTest {
         //Deliberately 0, not SLIP-44's registered 743/790 - both shipping Luckycoin wallets derive at
         //m/44'/0'/0', so following the registry here would strand existing users' funds.
         Assertions.assertEquals(0, Coin.LUCKYCOIN.getBip44CoinType());
+        //Bellscoin has a registered SLIP-44 (762); Dingocoin has none and derives at Dogecoin's slot (3).
+        Assertions.assertEquals(762, Coin.BELLSCOIN.getBip44CoinType());
+        Assertions.assertEquals(3, Coin.DINGOCOIN.getBip44CoinType());
     }
 
     @Test
@@ -300,11 +312,14 @@ public class CoinTest {
         Assertions.assertTrue(Coin.DOGECOIN.isAuxPow());
         Assertions.assertTrue(Coin.PEPECOIN.isAuxPow());
         Assertions.assertTrue(Coin.LUCKYCOIN.isAuxPow());
+        Assertions.assertTrue(Coin.DINGOCOIN.isAuxPow());
+        //Bellscoin is Scrypt but has NOT activated AuxPoW on mainnet, so its headers are plain 80-byte.
+        Assertions.assertFalse(Coin.BELLSCOIN.isAuxPow());
 
         //Only Litecoin has segwit and MWEB; the merge-mined chains never activated segwit.
         Assertions.assertTrue(Coin.LITECOIN.isSegwitSupported());
         Assertions.assertTrue(Coin.LITECOIN.isMwebSupported());
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Assertions.assertFalse(coin.isSegwitSupported(), coin + " must not report segwit support");
             Assertions.assertFalse(coin.isMwebSupported(), coin + " must not report MWEB support");
             Assertions.assertNull(coin.params(Network.MAINNET).bech32AddressHrp(), coin + " must have no bech32 HRP");
@@ -318,6 +333,8 @@ public class CoinTest {
         Assertions.assertEquals(22556, Coin.DOGECOIN.params(Network.MAINNET).defaultPort());
         Assertions.assertEquals(33874, Coin.PEPECOIN.params(Network.MAINNET).defaultPort());
         Assertions.assertEquals(9917, Coin.LUCKYCOIN.params(Network.MAINNET).defaultPort());
+        Assertions.assertEquals(19919, Coin.BELLSCOIN.params(Network.MAINNET).defaultPort());
+        Assertions.assertEquals(33117, Coin.DINGOCOIN.params(Network.MAINNET).defaultPort());
     }
 
     /**
@@ -325,7 +342,7 @@ public class CoinTest {
      */
     @Test
     public void testUnverifiedNetworksThrow() {
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             for(Network network : new Network[]{Network.TESTNET, Network.REGTEST, Network.SIGNET}) {
                 Assertions.assertThrows(IllegalStateException.class, () -> coin.params(network),
                         coin + " on " + network + " must throw rather than guess parameters");
@@ -359,7 +376,7 @@ public class CoinTest {
     @Test
     public void testSupportedCanonicalValues() {
         Assertions.assertArrayEquals(Network.canonicalValues(), Coin.LITECOIN.supportedCanonicalValues());
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Assertions.assertArrayEquals(new Network[]{Network.MAINNET}, coin.supportedCanonicalValues(),
                     coin + " should expose only mainnet until other networks are verified");
         }

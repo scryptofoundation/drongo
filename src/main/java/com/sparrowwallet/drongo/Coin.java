@@ -21,7 +21,14 @@ public enum Coin {
     LITECOIN("litecoin", "Litecoin", "LTC", "litecoin", 2, false, true, true),
     DOGECOIN("dogecoin", "Dogecoin", "DOGE", "dogecoin", 3, true, false, false),
     PEPECOIN("pepecoin", "Pepecoin", "PEP", "pepecoin-network", 3434, true, false, false),
-    LUCKYCOIN("luckycoin", "Luckycoin", "LKY", "luckycoin", 0, true, false, false);
+    LUCKYCOIN("luckycoin", "Luckycoin", "LKY", "luckycoin", 0, true, false, false),
+    //Bellscoin: Dogecoin Core derivative, Scrypt, but AuxPoW is NOT activated on mainnet (legacy blocks),
+    //so its headers are standard 80-byte.
+    BELLSCOIN("bellscoin", "Bellscoin", "BELLS", "bellscoin", 762, false, false, false),
+    //Dingocoin reuses Dogecoin's entire address/key identity (P2PKH 30, WIF 158, dgub/dgpv, coin type 3,
+    //and even the same genesis hash). It is a distinct chain only at the network layer (magic c1c1c1c1,
+    //ports). Safe here because each build is a single coin pointed at that coin's own backend.
+    DINGOCOIN("dingocoin", "Dingocoin", "DINGO", "dingocoin", 3, true, false, false);
 
     private final String name;
     private final String displayName;
@@ -56,7 +63,7 @@ public enum Coin {
         return switch(this) {
             case LITECOIN -> true;
             //Only mainnet parameters have been verified for the merge-mined chains so far.
-            case DOGECOIN, PEPECOIN, LUCKYCOIN -> network == Network.MAINNET;
+            case DOGECOIN, PEPECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
         };
     }
 
@@ -131,6 +138,20 @@ public enum Coin {
             case LUCKYCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(47, "KL", 5, "3", null, null, null,
                         ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 175, 9917);
+                default -> throw unverified(network);
+            };
+            //Bellscoin: Nintondo revival (params from the idquantum-dev branch, NOT master which is
+            //unmodified Dogecoin). dgub/dgpv keys, no segwit. P2PKH 25 -> "B", P2SH 30 -> "D".
+            case BELLSCOIN -> switch(network) {
+                case MAINNET -> new ChainParams(25, "B", 30, "D", null, null, null,
+                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 153, 19919);
+                default -> throw unverified(network);
+            };
+            //Dingocoin: address/key identity identical to Dogecoin (P2PKH 30 "D", P2SH 22 "9A", WIF 158,
+            //dgub/dgpv). Distinct only by network magic and ports, which the backend handles.
+            case DINGOCOIN -> switch(network) {
+                case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null,
+                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 33117);
                 default -> throw unverified(network);
             };
         };
