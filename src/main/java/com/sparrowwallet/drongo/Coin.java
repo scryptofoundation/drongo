@@ -18,14 +18,15 @@ import java.util.Locale;
  * cycle between Coin and Network.
  */
 public enum Coin {
-    LITECOIN("litecoin", "Litecoin", "LTC", 2, false, true, true),
-    DOGECOIN("dogecoin", "Dogecoin", "DOGE", 3, true, false, false),
-    PEPECOIN("pepecoin", "Pepecoin", "PEP", 3434, true, false, false),
-    LUCKYCOIN("luckycoin", "Luckycoin", "LKY", 0, true, false, false);
+    LITECOIN("litecoin", "Litecoin", "LTC", "litecoin", 2, false, true, true),
+    DOGECOIN("dogecoin", "Dogecoin", "DOGE", "dogecoin", 3, true, false, false),
+    PEPECOIN("pepecoin", "Pepecoin", "PEP", "pepecoin-network", 3434, true, false, false),
+    LUCKYCOIN("luckycoin", "Luckycoin", "LKY", "luckycoin", 0, true, false, false);
 
     private final String name;
     private final String displayName;
     private final String ticker;
+    private final String coingeckoId;
     private final int bip44CoinType;
     private final boolean auxPow;
     private final boolean segwit;
@@ -33,10 +34,11 @@ public enum Coin {
 
     private static Coin currentCoin;
 
-    Coin(String name, String displayName, String ticker, int bip44CoinType, boolean auxPow, boolean segwit, boolean mweb) {
+    Coin(String name, String displayName, String ticker, String coingeckoId, int bip44CoinType, boolean auxPow, boolean segwit, boolean mweb) {
         this.name = name;
         this.displayName = displayName;
         this.ticker = ticker;
+        this.coingeckoId = coingeckoId;
         this.bip44CoinType = bip44CoinType;
         this.auxPow = auxPow;
         this.segwit = segwit;
@@ -163,6 +165,14 @@ public enum Coin {
     /** Ticker symbol, e.g. "LTC". Used for unit labels and fiat pairing. */
     public String getTicker() {
         return ticker;
+    }
+
+    /**
+     * CoinGecko API id for fiat price lookups, e.g. "litecoin", "dogecoin". Best-effort - a coin without
+     * a CoinGecko listing simply yields no exchange rates rather than an error.
+     */
+    public String getCoingeckoId() {
+        return coingeckoId;
     }
 
     /**
