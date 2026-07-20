@@ -152,6 +152,14 @@ public enum Coin {
         return displayName;
     }
 
+    /**
+     * The reference full-node software for this chain, e.g. "Litecoin Core", "Dogecoin Core". Each of
+     * these coins ships a Bitcoin Core derivative under this name.
+     */
+    public String getCoreName() {
+        return displayName + " Core";
+    }
+
     /** Ticker symbol, e.g. "LTC". Used for unit labels and fiat pairing. */
     public String getTicker() {
         return ticker;
