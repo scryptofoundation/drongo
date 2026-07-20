@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.protocol;
 
+import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.KeyDerivation;
 import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.Utils;
@@ -1729,8 +1730,14 @@ public enum ScriptType {
         return Arrays.stream(values()).filter(scriptType -> scriptType.isAllowed(policyType)).collect(Collectors.toList());
     }
 
+    /**
+     * Addressable script types available for the active coin. Chains without segwit or MWEB must not
+     * offer those types - their addresses encode against an HRP the chain does not have.
+     */
     public static List<ScriptType> getAddressableScriptTypes(PolicyType policyType) {
-        return Arrays.stream(ADDRESSABLE_TYPES).filter(scriptType -> scriptType.isAllowed(policyType)).collect(Collectors.toList());
+        return Arrays.stream(ADDRESSABLE_TYPES)
+                .filter(scriptType -> scriptType.isAllowed(policyType) && Coin.get().supports(scriptType))
+                .collect(Collectors.toList());
     }
 
     public static ScriptType getType(Script script) {

@@ -4,7 +4,9 @@ import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.address.InvalidAddressException;
 import com.sparrowwallet.drongo.address.P2PKHAddress;
 import com.sparrowwallet.drongo.address.P2SHAddress;
+import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.protocol.Base58;
+import com.sparrowwallet.drongo.protocol.ScriptType;
 import com.sparrowwallet.drongo.uri.BitcoinURI;
 import com.sparrowwallet.drongo.uri.BitcoinURIParseException;
 import org.junit.jupiter.api.AfterEach;
@@ -218,6 +220,52 @@ public class CoinTest {
             Coin.set(coin);
             Assertions.assertNull(BitcoinURI.getSilentPaymentsAddressField(),
                     coin + " has no silent payments HRP and so no URI field");
+        }
+    }
+
+    @Test
+    public void testScriptTypeSupport() {
+        //Litecoin keeps everything it had before the coin axis.
+        for(ScriptType scriptType : ScriptType.ADDRESSABLE_TYPES) {
+            Assertions.assertTrue(Coin.LITECOIN.supports(scriptType), "Litecoin should still support " + scriptType);
+        }
+
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+            //Legacy types work on every chain.
+            Assertions.assertTrue(coin.supports(ScriptType.P2PKH));
+            Assertions.assertTrue(coin.supports(ScriptType.P2SH));
+            Assertions.assertTrue(coin.supports(ScriptType.P2PK));
+
+            for(ScriptType witnessType : ScriptType.WITNESS_TYPES) {
+                Assertions.assertFalse(coin.supports(witnessType), coin + " must not support " + witnessType);
+            }
+
+            for(ScriptType mwebType : new ScriptType[]{ScriptType.MWEB, ScriptType.MWEB_HOGEX, ScriptType.MWEB_PEGIN}) {
+                Assertions.assertFalse(coin.supports(mwebType), coin + " must not support " + mwebType);
+            }
+        }
+    }
+
+    /**
+     * Wallet creation offers whatever getAddressableScriptTypes returns, so it must not list a type
+     * whose address encoding would hit a null HRP.
+     */
+    @Test
+    public void testAddressableScriptTypesAreFilteredByCoin() {
+        Coin.set(Coin.LITECOIN);
+        List<ScriptType> litecoinTypes = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE);
+        Assertions.assertTrue(litecoinTypes.contains(ScriptType.P2WPKH), "Litecoin should still offer segwit");
+
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN}) {
+            Coin.set(coin);
+            List<ScriptType> types = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE);
+            Assertions.assertFalse(types.isEmpty(), coin + " must still offer legacy script types");
+            Assertions.assertTrue(types.contains(ScriptType.P2PKH), coin + " should offer P2PKH");
+
+            for(ScriptType type : types) {
+                Assertions.assertTrue(coin.supports(type),
+                        coin + " offered unsupported script type " + type);
+            }
         }
     }
 

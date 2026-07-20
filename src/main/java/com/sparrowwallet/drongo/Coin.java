@@ -1,5 +1,7 @@
 package com.sparrowwallet.drongo;
 
+import com.sparrowwallet.drongo.protocol.ScriptType;
+
 import java.util.Arrays;
 import java.util.Locale;
 
@@ -59,6 +61,25 @@ public enum Coin {
     /** The canonical networks this coin has verified parameters for. */
     public Network[] supportedCanonicalValues() {
         return Arrays.stream(Network.canonicalValues()).filter(this::supports).toArray(Network[]::new);
+    }
+
+    /**
+     * Whether this chain can use the given script type.
+     *
+     * The witness types need segwit and the MWEB types need MWEB, neither of which the merge-mined
+     * chains have - their addresses would otherwise be encoded against a null HRP. P2PK, P2PKH and
+     * P2SH work everywhere.
+     */
+    public boolean supports(ScriptType scriptType) {
+        if(scriptType == ScriptType.MWEB || scriptType == ScriptType.MWEB_HOGEX || scriptType == ScriptType.MWEB_PEGIN) {
+            return mweb;
+        }
+
+        if(Arrays.asList(ScriptType.WITNESS_TYPES).contains(scriptType)) {
+            return segwit;
+        }
+
+        return true;
     }
 
     /**
