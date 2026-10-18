@@ -31,6 +31,10 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     private Wallet masterWallet;
     private List<Wallet> childWallets = new ArrayList<>();
     private Network network = Network.getCanonical();
+    //Per-wallet coin, the axis that lets one app hold both Litecoin and Dogecoin wallets. Null for wallets
+    //saved before this existed (and for single-coin flavor builds); getCoin() then falls back to the
+    //process-level Coin.get() so those wallets keep working unchanged.
+    private com.sparrowwallet.drongo.Coin coin;
     private PolicyType policyType;
     private ScriptType scriptType;
     private Policy defaultPolicy;
@@ -469,6 +473,28 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
 
     public void setNetwork(Network network) {
         this.network = network;
+    }
+
+    public com.sparrowwallet.drongo.Coin getCoin() {
+        if(coin != null) {
+            return coin;
+        }
+
+        //Child wallets follow their master's coin before the process fallback
+        if(!isMasterWallet() && getMasterWallet() != null) {
+            return getMasterWallet().getCoin();
+        }
+
+        return com.sparrowwallet.drongo.Coin.get();
+    }
+
+    //Raw field accessor for persistence - null when the wallet follows the process coin
+    public com.sparrowwallet.drongo.Coin coin() {
+        return coin;
+    }
+
+    public void setCoin(com.sparrowwallet.drongo.Coin coin) {
+        this.coin = coin;
     }
 
     public PolicyType getPolicyType() {
@@ -1075,7 +1101,9 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
      * @return the minimum viable value than the provided change output must have in order to not be dust
      */
     public long getDustThreshold(TransactionOutput output, Double feeRate) {
-        return getFee(output, feeRate, Transaction.DUST_RELAY_TX_FEE);
+        //Resolved from this wallet's own coin, not the focused one: the Dogecoin-derived chains define dust
+        //as a flat limit far above what the Bitcoin fee-rate rule yields - see Coin.getDustLimit
+        return Math.max(getFee(output, feeRate, Transaction.DUST_RELAY_TX_FEE), getCoin().getDustLimit());
     }
 
     /**
@@ -2264,6 +2292,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         }
         copy.setPolicyType(policyType);
         copy.setScriptType(scriptType);
+        copy.setCoin(coin);
         copy.setDefaultPolicy(defaultPolicy.copy());
         for(Keystore keystore : keystores) {
             copy.getKeystores().add(keystore.copy());

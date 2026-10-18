@@ -2,17 +2,27 @@ package com.sparrowwallet.drongo;
 
 import com.sparrowwallet.drongo.protocol.ScriptType;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The chain axis, orthogonal to {@link Network}. A Coin identifies which chain the application is
  * built for; Network identifies which network of that chain (mainnet, testnet, ...). Together they
  * select a {@link ChainParams}.
  *
- * Like Network, this is a per-process singleton - each Sparrow-Scrypto binary ships one coin. This
- * keeps every existing {@code Network.get().getXxx()} call site working unchanged, with Network
- * delegating its chain constants here at call time.
+ * The active coin is resolved per-thread, not per-process. This was a process-wide singleton while
+ * every binary baked exactly one coin; the unified Sparrow-Scrypt build holds wallets of several
+ * coins at once, so the foreground follows the focused wallet's tab while background work brackets
+ * itself with {@link #beginScope}/{@link #endScope} to pin its own wallet's coin. Under
+ * {@link #setStrictScoping} an unscoped background resolution throws rather than falling back to the
+ * focused coin, because that fallback silently derives on the wrong chain. Either way every existing
+ * {@code Network.get().getXxx()} call site keeps working, with Network delegating its chain
+ * constants here at call time.
  *
  * Params are resolved in a method rather than an EnumMap field to avoid a static initialisation
  * cycle between Coin and Network.
@@ -27,8 +37,17 @@ public enum Coin {
     BELLSCOIN("bellscoin", "Bellscoin", "BELLS", "bellscoin", 762, false, false, false),
     //Dingocoin reuses Dogecoin's entire address/key identity (P2PKH 30, WIF 158, dgub/dgpv, coin type 3,
     //and even the same genesis hash). It is a distinct chain only at the network layer (magic c1c1c1c1,
-    //ports). Safe here because each build is a single coin pointed at that coin's own backend.
-    DINGOCOIN("dingocoin", "Dingocoin", "DINGO", "dingocoin", 3, true, false, false);
+    //ports). The flavor builds made that harmless - one coin per binary, pointed at that coin's own
+    //backend - but the unified build does not, and that justification no longer holds. A Dingocoin
+    //address is byte-identical to a Dogecoin one, so neither an address, an xpub nor a derivation path
+    //says which chain it belongs to. Anything that can send funds must take the chain from the wallet's
+    //own coin and never infer it by parsing - see coinsSharingAddressEncoding.
+    DINGOCOIN("dingocoin", "Dingocoin", "DINGO", "dingocoin", 3, true, false, false),
+    //Junkcoin: the May 2013 chain Luckycoin forked from (Junkcoin -> Luckycoin -> Dogecoin), revived by
+    //the Junkcoin Foundation. Scrypt, AuxPoW merge-mined (chain ID 0x2020, active since height 173000).
+    //bip44CoinType is 0 because the Foundation's shipping wallets (web wallet/JunkieWally) derive at
+    //m/44'/0'/0' - same reasoning as Luckycoin.
+    JUNKCOIN("junkcoin", "Junkcoin", "JKC", "junkcoin", 0, true, false, false);
 
     private final String name;
     private final String displayName;
@@ -40,6 +59,19 @@ public enum Coin {
     private final boolean mweb;
 
     private static Coin currentCoin;
+    //Per-thread override of the active coin. Background wallet operations scope themselves to their wallet's
+    //coin via beginScope/endScope, so concurrent syncs of different-coin wallets never poison each other's
+    //address/key derivation. When unset, get() falls back to currentCoin - except under strict scoping off
+    //the foreground thread, where it throws instead of guessing.
+    private static final Logger log = LoggerFactory.getLogger(Coin.class);
+
+    private static final ThreadLocal<Coin> threadCoin = new ThreadLocal<>();
+
+    private static volatile boolean strictScoping;
+    private static volatile Thread foregroundThread;
+
+    //Bitcoin's SLIP-44 coin type. Luckycoin and Junkcoin derive here too - see sharesBitcoinDerivation().
+    private static final int BITCOIN_BIP44_COIN_TYPE = 0;
 
     Coin(String name, String displayName, String ticker, String coingeckoId, int bip44CoinType, boolean auxPow, boolean segwit, boolean mweb) {
         this.name = name;
@@ -63,7 +95,7 @@ public enum Coin {
         return switch(this) {
             case LITECOIN -> true;
             //Only mainnet parameters have been verified for the merge-mined chains so far.
-            case DOGECOIN, PEPECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
+            case DOGECOIN, PEPECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN, JUNKCOIN -> network == Network.MAINNET;
         };
     }
 
@@ -123,13 +155,13 @@ public enum Coin {
             //serialisation default here, with xpub accepted on import.
             case DOGECOIN -> switch(network) {
                 case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null,
-                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 22556);
+                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 22555);
                 default -> throw unverified(network);
             };
             //Pepecoin: Dogecoin Core derivative, inherits dgub/dgpv unchanged. No segwit, no bech32.
             case PEPECOIN -> switch(network) {
                 case MAINNET -> new ChainParams(56, "P", 22, "9A", null, null, null,
-                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 33874);
+                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 33873);
                 default -> throw unverified(network);
             };
             //Luckycoin: uses Bitcoin's standard xpub/xprv prefixes, not Dogecoin's. No segwit.
@@ -137,24 +169,62 @@ public enum Coin {
             //published examples only ever show "L...", but "K..." is equally valid and must be accepted.
             case LUCKYCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(47, "KL", 5, "3", null, null, null,
-                        ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 175, 9917);
+                        ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 175, 9918);
                 default -> throw unverified(network);
             };
             //Bellscoin: Nintondo revival (params from the idquantum-dev branch, NOT master which is
             //unmodified Dogecoin). dgub/dgpv keys, no segwit. P2PKH 25 -> "B", P2SH 30 -> "D".
             case BELLSCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(25, "B", 30, "D", null, null, null,
-                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 153, 19919);
+                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 153, 8332);
                 default -> throw unverified(network);
             };
             //Dingocoin: address/key identity identical to Dogecoin (P2PKH 30 "D", P2SH 22 "9A", WIF 158,
             //dgub/dgpv). Distinct only by network magic and ports, which the backend handles.
             case DINGOCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null,
-                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 33117);
+                        ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 34646);
+                default -> throw unverified(network);
+            };
+            //Junkcoin: verified against Junkcoin-Foundation/junkcoin-core chainparams.cpp. Standard
+            //xpub/xprv like Luckycoin, not dgub. P2SH 5 is Bitcoin's script version, so JKC P2SH
+            //addresses are byte-identical to Bitcoin's - same situation as Luckycoin.
+            case JUNKCOIN -> switch(network) {
+                case MAINNET -> new ChainParams(16, "7", 5, "3", null, null, null,
+                        ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 144, 9771);
                 default -> throw unverified(network);
             };
         };
+    }
+
+    /**
+     * Every other supported coin on which a base58 address carrying this version byte is also a
+     * well-formed address, in declaration order.
+     *
+     * A non-empty result means the address string itself does not identify its chain, so only the
+     * sending wallet's own coin does. Callers that can move funds must warn on that rather than treat
+     * a successful parse as proof the address belongs to the chain being spent.
+     *
+     * The comparison is over the version byte across both address types, not per script type: it is
+     * the whole of what a base58 address encodes about its chain, and the collisions cross script
+     * types. Dogecoin P2PKH and Bellscoin P2SH are both 30.
+     */
+    public static List<Coin> coinsSharingAddressEncoding(Coin coin, int versionByte, Network network) {
+        List<Coin> sharing = new ArrayList<>();
+
+        for(Coin other : values()) {
+            //Unsupported combinations have no verified parameters, and params() throws rather than guess.
+            if(other == coin || !other.supports(network)) {
+                continue;
+            }
+
+            ChainParams params = other.params(network);
+            if(params.p2pkhAddressHeader() == versionByte || params.p2shAddressHeader() == versionByte) {
+                sharing.add(other);
+            }
+        }
+
+        return sharing;
     }
 
     private IllegalStateException unverified(Network network) {
@@ -189,6 +259,15 @@ public enum Coin {
     }
 
     /**
+     * Label for the smallest (integer) unit - the analogue of Bitcoin's satoshi. Every one of these chains
+     * inherits Bitcoin's 8-decimal base unit, only the name differs. Litecoin's community uses "lits"
+     * (litoshi); the merge-mined chains have no established sub-unit name, so the generic "sats" is used.
+     */
+    public String getSubunit() {
+        return this == LITECOIN ? "lits" : "sats";
+    }
+
+    /**
      * CoinGecko API id for fiat price lookups, e.g. "litecoin", "dogecoin". Best-effort - a coin without
      * a CoinGecko listing simply yields no exchange rates rather than an error.
      */
@@ -216,11 +295,84 @@ public enum Coin {
     }
 
     /**
+     * Whether this chain derives at Bitcoin's SLIP-44 coin type, so a seed used here produces exactly the
+     * keys a Bitcoin wallet would produce from it - the same xpub serialisation and the same addresses.
+     *
+     * Luckycoin and Junkcoin both do. That is the right call for compatibility, since their shipping
+     * wallets derive at m/44'/0'/0' and following the SLIP-44 registry instead would strand existing
+     * funds - but it means a seed reused from a Bitcoin wallet puts the very same keys on both chains.
+     * Anything creating or importing a keystore on these chains should say so rather than leave the user
+     * to assume the chains are separate.
+     */
+    public boolean sharesBitcoinDerivation() {
+        return bip44CoinType == BITCOIN_BIP44_COIN_TYPE;
+    }
+
+    /**
      * Whether this chain is merge-mined via AuxPoW, making serialised block headers variable-length.
      * Clients must not assume an 80-byte header on these chains.
      */
     public boolean isAuxPow() {
         return auxPow;
+    }
+
+    /**
+     * Minimum relay fee rate in sat/vB, from this chain's own DEFAULT_MIN_RELAY_TX_FEE (a per-kB constant
+     * in Core, divided by 1000 here).
+     *
+     * These chains do not share Bitcoin's fee scale: the Dogecoin derivatives set RECOMMENDED_MIN_TX_FEE
+     * = COIN/100 per kB and DEFAULT_MIN_RELAY_TX_FEE = a tenth of it, and Dingocoin relays nothing under
+     * a whole COIN per kB. Each value below is read from that chain's own source - dogecoin/dogecoin,
+     * pepecoinppc/pepecoin, LuckycoinFoundation/Luckycoin, Junkcoin-Foundation/junkcoin-core,
+     * dingocoin/dingocoin, and nintondo/bellscoin at idquantum-dev (the branch this coin's address
+     * parameters also come from; master is unmodified Dogecoin).
+     *
+     * This applies when the backend cannot report a relay fee itself, which an Electrum server always can
+     * but an Esplora REST instance never does.
+     */
+    public double getMinRelayFeeRate() {
+        return switch(this) {
+            case LITECOIN, BELLSCOIN -> 1d;
+            case DOGECOIN, PEPECOIN, LUCKYCOIN, JUNKCOIN -> 100d;
+            case DINGOCOIN -> 100000d;
+        };
+    }
+
+    /**
+     * The chain's recommended fee rate in sat/vB (RECOMMENDED_MIN_TX_FEE), which on these chains is also
+     * the mining floor DEFAULT_BLOCK_MIN_TX_FEE. A transaction below it relays but is not mined by
+     * default-configured miners, so this is a floor on the fee to offer, not merely a fallback for when
+     * no estimator exists. Never below {@link #getMinRelayFeeRate()}.
+     */
+    public double getRecommendedFeeRate() {
+        return switch(this) {
+            case LITECOIN -> 1d;
+            case BELLSCOIN -> 10d;
+            case JUNKCOIN -> 100d;
+            case DOGECOIN, PEPECOIN, LUCKYCOIN -> 1000d;
+            case DINGOCOIN -> 100000d;
+        };
+    }
+
+    /**
+     * The value in satoshis below which an output should not be created, or 0 where the chain uses
+     * Bitcoin's fee-rate-derived dust rule instead of a flat limit.
+     *
+     * This is the chain's DEFAULT_DUST_LIMIT - the soft limit, not DEFAULT_HARD_DUST_LIMIT. Outputs below
+     * the hard limit are non-standard and will not relay at all; outputs between the two relay only if the
+     * transaction pays an extra RECOMMENDED_MIN_TX_FEE for each of them. Wallet fee calculation does not
+     * model that penalty, so treating the soft limit as the floor keeps every transaction relayable
+     * without it, at the cost of sweeping a sub-limit remainder into the fee. On these chains that
+     * remainder is worth a fraction of a cent.
+     */
+    public long getDustLimit() {
+        return switch(this) {
+            case LITECOIN -> 0L;
+            case DINGOCOIN -> 1000L;
+            case BELLSCOIN -> 10000L;
+            case JUNKCOIN -> 100000L;
+            case DOGECOIN, PEPECOIN, LUCKYCOIN -> 1000000L;
+        };
     }
 
     public boolean isSegwitSupported() {
@@ -232,6 +384,35 @@ public enum Coin {
     }
 
     public static Coin get() {
+        Coin scoped = threadCoin.get();
+        if(scoped != null) {
+            return scoped;
+        }
+
+        if(strictScoping && Thread.currentThread() != foregroundThread) {
+            IllegalStateException e = new IllegalStateException("No coin scope on thread \"" + Thread.currentThread().getName()
+                    + "\". Background work must bracket itself with Coin.beginScope(wallet.getCoin()) and"
+                    + " Coin.endScope(previous) so it resolves its own wallet's chain. Falling back to the"
+                    + " focused wallet's coin here would derive a well-formed address on the wrong chain,"
+                    + " which between Dogecoin and Dingocoin is indistinguishable from a correct one.");
+            //Background task failures are often consumed by the task's failed state, so log loudly here too
+            log.error(e.getMessage(), e);
+            throw e;
+        }
+
+        if(currentCoin == null) {
+            currentCoin = LITECOIN;
+        }
+
+        return currentCoin;
+    }
+
+    /**
+     * The process-wide active coin (the focused wallet tab's coin), ignoring any thread scope.
+     * Callers deciding whether focus has moved to a different coin must use this rather than
+     * {@link #get()}, which inside a beginScope bracket returns the scoped coin instead.
+     */
+    public static Coin getGlobal() {
         if(currentCoin == null) {
             currentCoin = LITECOIN;
         }
@@ -240,11 +421,49 @@ public enum Coin {
     }
 
     public static void set(Coin coin) {
-        if(currentCoin != null && coin != currentCoin && !isTest()) {
-            throw new IllegalStateException("Coin already set to " + currentCoin.getName());
-        }
-
+        //The active coin can change at runtime as the app switches between wallets of different coins (one
+        //app holding both Litecoin and Dogecoin), so unlike the old single-flavor model this no longer
+        //throws when re-set to a different coin. Callers set it from the wallet being operated on.
         currentCoin = coin;
+    }
+
+    /**
+     * Makes an unscoped {@link #get()} off the foreground thread throw rather than fall back to the
+     * focused wallet's coin. The unified build enables this; the single-coin flavor builds must not,
+     * since there the fallback is the only coin there is and is always right.
+     */
+    public static void setStrictScoping(boolean strict) {
+        strictScoping = strict;
+    }
+
+    /**
+     * Registers the thread on which resolving to the focused wallet's coin is the intended behaviour -
+     * the UI thread, whose whole model is focus-follow. Every other thread must declare a scope once
+     * strict scoping is on. Pass null to clear.
+     */
+    public static void setForegroundThread(Thread thread) {
+        foregroundThread = thread;
+    }
+
+    /**
+     * Scopes the active coin to the current thread only, returning the previous scope (or null) to pass back
+     * to {@link #endScope}. Background wallet operations (sync, broadcast, address derivation) must bracket
+     * their work with beginScope(wallet.getCoin()) / endScope(previous) in a try/finally so they always
+     * resolve their wallet's coin regardless of which wallet tab the foreground has focused - this is what
+     * lets a Litecoin tab and a Dogecoin tab sync concurrently without one corrupting the other's addresses.
+     */
+    public static Coin beginScope(Coin coin) {
+        Coin previous = threadCoin.get();
+        threadCoin.set(coin);
+        return previous;
+    }
+
+    public static void endScope(Coin previous) {
+        if(previous == null) {
+            threadCoin.remove();
+        } else {
+            threadCoin.set(previous);
+        }
     }
 
     private static boolean isTest() {
@@ -261,6 +480,12 @@ public enum Coin {
      * before the coin axis was introduced, so Network's getters are one-line delegations.
      *
      * bech32Hrp, spHrp and mwebHrp are null on chains without segwit, silent payments or MWEB.
+     *
+     * defaultPort is the node's JSON-RPC port (chainparamsbase nRPCPort), NOT its P2P port - every caller
+     * uses it to reach Core over RPC. The two are adjacent on most of these chains, which made it easy to
+     * take the wrong one: Dogecoin listens for peers on 22556 and for RPC on 22555, and Luckycoin reverses
+     * that ordering. Bellscoin V3 rebased on modern Core without changing the base params, so it answers
+     * RPC on Bitcoin's 8332 despite its own P2P port. Junkcoin uses 9771 for both.
      */
     public record ChainParams(
             int p2pkhAddressHeader,

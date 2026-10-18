@@ -44,7 +44,13 @@ public enum BitcoinUnit {
     }
 
     public String getLabel() {
-        return label;
+        //The whole-coin and base-unit labels track the active coin (LTC/lits, DOGE/sats, ...). AUTO is not a
+        //unit but a display mode, so it keeps its authored label.
+        return switch(this) {
+            case BTC -> Coin.get().getTicker();
+            case SATOSHIS -> Coin.get().getSubunit();
+            default -> label;
+        };
     }
 
     public abstract long getSatsValue(double unitValue);
@@ -62,6 +68,6 @@ public enum BitcoinUnit {
 
     @Override
     public String toString() {
-        return label;
+        return getLabel();
     }
 }

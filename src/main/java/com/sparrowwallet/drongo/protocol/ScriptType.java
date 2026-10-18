@@ -1591,7 +1591,15 @@ public enum ScriptType {
     }
 
     public String getDefaultDerivationPath() {
-        return Network.get() != Network.MAINNET ? defaultDerivationPath.replace("/2'/0'", "/1'/0'") : defaultDerivationPath;
+        if(Network.get() != Network.MAINNET) {
+            return defaultDerivationPath.replace("/2'/0'", "/1'/0'");
+        }
+
+        //The path literals carry Litecoin's SLIP-44 coin type (2) - substitute the active coin's type so
+        //a Dogecoin wallet derives at m/44'/3'/0' etc. Wallets created by the single-coin flavors before
+        //this change derived at 2' regardless of coin (see Storage.inferLegacyCoin in the app).
+        int coinType = com.sparrowwallet.drongo.Coin.get().getBip44CoinType();
+        return coinType == 2 ? defaultDerivationPath : defaultDerivationPath.replace("/2'/0'", "/" + coinType + "'/0'");
     }
 
     public List<ChildNumber> getDefaultDerivation() {
@@ -1770,7 +1778,9 @@ public enum ScriptType {
      * @return the minimum viable value than the provided output must have in order to not be dust
      */
     public long getDustThreshold(TransactionOutput output, Double feeRate) {
-        return getFee(output, feeRate, Transaction.DUST_RELAY_TX_FEE);
+        //The Dogecoin-derived chains define dust as a flat limit rather than deriving it from a fee rate,
+        //and theirs is far above what the Bitcoin rule yields - see Coin.getDustLimit
+        return Math.max(getFee(output, feeRate, Transaction.DUST_RELAY_TX_FEE), com.sparrowwallet.drongo.Coin.get().getDustLimit());
     }
 
     /**
