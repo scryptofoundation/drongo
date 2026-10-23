@@ -413,10 +413,47 @@ public class CoinTest {
     public void testUnverifiedNetworksThrow() {
         for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
             for(Network network : new Network[]{Network.TESTNET, Network.REGTEST, Network.SIGNET}) {
+                if(coin.supports(network)) {
+                    continue; //verified, pinned by its own test below
+                }
                 Assertions.assertThrows(IllegalStateException.class, () -> coin.params(network),
                         coin + " on " + network + " must throw rather than guess parameters");
             }
         }
+    }
+
+    /**
+     * Test mode: the coins offered on testnet, and Luckycoin excluded because its testnet is dead.
+     */
+    @Test
+    public void testCoinsAvailableOnTestnet() {
+        Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.LITECOIN));
+        Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.JUNKCOIN));
+        Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.PEPECOIN));
+        Assertions.assertFalse(Coin.availableOn(Network.TESTNET).contains(Coin.LUCKYCOIN));
+        Assertions.assertFalse(Coin.availableOn(Network.TESTNET).contains(Coin.BELLSCOIN));
+        Coin.ChainParams pep = Coin.PEPECOIN.params(Network.TESTNET);
+        Assertions.assertEquals(113, pep.p2pkhAddressHeader());
+        Assertions.assertEquals(196, pep.p2shAddressHeader());
+        Assertions.assertEquals(241, pep.dumpedPrivateKeyHeader());
+        Assertions.assertEquals(44873, pep.defaultPort());
+        Assertions.assertEquals(List.of(Coin.values()), Coin.availableOn(Network.MAINNET));
+    }
+
+    /**
+     * Junkcoin testnet, from junkcoin-core CTestNetParams. Keys serialise as tpub/tprv (not Core's dgub)
+     * because dgub is a mainnet-only header here and a wallet saved with it could not be read back.
+     */
+    @Test
+    public void testJunkcoinTestnetParams() {
+        Coin.ChainParams testnet = Coin.JUNKCOIN.params(Network.TESTNET);
+        Assertions.assertEquals(111, testnet.p2pkhAddressHeader());
+        Assertions.assertEquals(5, testnet.p2shAddressHeader());
+        Assertions.assertEquals(239, testnet.dumpedPrivateKeyHeader());
+        Assertions.assertEquals(19771, testnet.defaultPort());
+        Assertions.assertEquals(ExtendedKey.Header.tpub, testnet.xpubHeader());
+        Assertions.assertEquals(ExtendedKey.Header.tprv, testnet.xprvHeader());
+        Assertions.assertNull(testnet.bech32AddressHrp());
     }
 
     /**
@@ -445,7 +482,9 @@ public class CoinTest {
     @Test
     public void testSupportedCanonicalValues() {
         Assertions.assertArrayEquals(Network.canonicalValues(), Coin.LITECOIN.supportedCanonicalValues());
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
+        Assertions.assertArrayEquals(new Network[]{Network.MAINNET, Network.TESTNET}, Coin.JUNKCOIN.supportedCanonicalValues());
+        Assertions.assertArrayEquals(new Network[]{Network.MAINNET, Network.TESTNET}, Coin.PEPECOIN.supportedCanonicalValues());
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Assertions.assertArrayEquals(new Network[]{Network.MAINNET}, coin.supportedCanonicalValues(),
                     coin + " should expose only mainnet until other networks are verified");
         }

@@ -91,11 +91,26 @@ public enum Coin {
      * belongs to a different network than the configured one - must filter on this rather than calling
      * params() and catching. Support is statically known, so it should not be discovered by exception.
      */
+    /**
+     * The coins offered on the given network, in declaration order. Test mode switches every coin at once, so
+     * pickers use this rather than values(): a coin with no verified (or no live) testnet is not offered there.
+     */
+    public static List<Coin> availableOn(Network network) {
+        return Arrays.stream(values()).filter(coin -> coin.supports(network)).toList();
+    }
+
     public boolean supports(Network network) {
         return switch(this) {
             case LITECOIN -> true;
-            //Only mainnet parameters have been verified for the merge-mined chains so far.
-            case DOGECOIN, PEPECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN, JUNKCOIN -> network == Network.MAINNET;
+            //A coin is offered on testnet only when its testnet parameters are verified against its own
+            //chainparams AND the testnet is alive with a public server to sync from. Luckycoin's testnet is
+            //dead (no seeds, nodes or servers answer). Bellscoin's live testnet runs BellsChain's params, not
+            //the Nintondo idquantum-dev params this mainnet uses, and has not produced a block since 2026-07.
+            //Dingocoin's testnet is dead (seed gone, the one answering node is at height 0). Dogecoin's testnet
+            //chain is alive (2026-10-23, ~68M) but no public Electrum or REST server serves it, so a wallet
+            //would have nothing to sync from; its params are known (113/196/241, tpub, RPC 44555) if one appears.
+            case JUNKCOIN, PEPECOIN -> network == Network.MAINNET || network == Network.TESTNET;
+            case DOGECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
         };
     }
 
@@ -162,6 +177,10 @@ public enum Coin {
             case PEPECOIN -> switch(network) {
                 case MAINNET -> new ChainParams(56, "P", 22, "9A", null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 33873);
+                //Testnet (pepecoinppc/pepecoin @4fb5a0cd CTestNetParams, chainparamsbase RPC 44873): P2PKH 113 "n",
+                //P2SH 196 "2", WIF 241, tpub/tprv. No segwit. Alive 2026-10-23 (tip ~1.55M).
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 44873);
                 default -> throw unverified(network);
             };
             //Luckycoin: uses Bitcoin's standard xpub/xprv prefixes, not Dogecoin's. No segwit.
@@ -192,6 +211,13 @@ public enum Coin {
             case JUNKCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(16, "7", 5, "3", null, null, null,
                         ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 144, 9771);
+                //Testnet (CTestNetParams + CBaseChainParams TESTNET, junkcoin-core v4 @0e5279a): P2PKH 111 "m/n",
+                //P2SH 5 (unchanged from mainnet), WIF 239, port 19771 for P2P and RPC. Its genesis equals
+                //mainnet's; block 1 (ccedee1f...) tells them apart. Core serialises testnet keys as dgub/dgpv,
+                //but those headers are mainnet-only here, so a testnet wallet saved as dgub could not be read
+                //back - keys use the standard tpub/tprv instead. Addresses do not depend on the key prefix.
+                case TESTNET -> new ChainParams(111, "mn", 5, "3", null, null, null,
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19771);
                 default -> throw unverified(network);
             };
         };
