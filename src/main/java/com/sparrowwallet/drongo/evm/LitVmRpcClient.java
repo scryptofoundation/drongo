@@ -7,7 +7,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import com.sparrowwallet.drongo.Utils;
+
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -147,12 +151,23 @@ public final class LitVmRpcClient {
 
     /** A ready-to-sign call (plain transfer when data is null) with fees taken from the chain and bounded. */
     public Eip1559Transaction prepareCall(EvmAddress from, EvmAddress to, BigInteger value, byte[] data) throws IOException {
-        BigInteger nonce = getPendingNonce(from);
+        return prepareCall(from, to, value, data, null, null);
+    }
+
+    /**
+     * As {@link #prepareCall(EvmAddress, EvmAddress, BigInteger, byte[])}, but with an explicit nonce and gas limit
+     * when not null. That lets a call that depends on an earlier one (a bridge deposit after its token approval) be
+     * signed up front, when its gas cannot be estimated yet because the approval is not mined.
+     */
+    public Eip1559Transaction prepareCall(EvmAddress from, EvmAddress to, BigInteger value, byte[] data, BigInteger nonce, BigInteger fixedGasLimit) throws IOException {
+        if(nonce == null) {
+            nonce = getPendingNonce(from);
+        }
         BigInteger priority = getMaxPriorityFee();
         BigInteger maxFee = getBaseFee().multiply(BigInteger.TWO).add(priority);
-        BigInteger gas = estimateGas(from, to, value, data);
+        BigInteger gas = fixedGasLimit != null ? fixedGasLimit : estimateGas(from, to, value, data);
         //A margin on the estimate; unused gas is not charged.
-        BigInteger gasLimit = gas.multiply(BigInteger.valueOf(12)).divide(BigInteger.TEN);
+        BigInteger gasLimit = fixedGasLimit != null ? fixedGasLimit : gas.multiply(BigInteger.valueOf(12)).divide(BigInteger.TEN);
         //The fee inputs come from the node. Bound them so a faulty or hostile node cannot set an absurd fee for the
         //user to sign. Not 21000: on an Arbitrum Nitro chain like LitVM the estimate includes the L1 data cost.
         if(gasLimit.compareTo(MAX_TRANSFER_GAS) > 0) {
@@ -189,6 +204,57 @@ public final class LitVmRpcClient {
         }
         boolean success = "0x1".equals(map.get("status"));
         return Optional.of(new Receipt(success, quantity(map.get("blockNumber")), quantity(map.get("gasUsed"))));
+    }
+
+    public record Log(EvmAddress address, List<byte[]> topics, byte[] data) {}
+
+    /** The event logs of a mined transaction; empty while it is pending. */
+    public List<Log> getTransactionLogs(String txHash) throws IOException {
+        Object result = call("eth_getTransactionReceipt", "[\"" + txHash + "\"]");
+        if(!(result instanceof Map<?, ?> map)) {
+            return List.of();
+        }
+        return parseLogs(map.get("logs"));
+    }
+
+    /** Logs one contract emitted in one block, filtered on topic0 and optionally topic1. */
+    public List<Log> getLogs(EvmAddress address, BigInteger block, byte[] topic0, byte[] topic1) throws IOException {
+        String blockHex = toQuantity(block);
+        String topics = "[\"0x" + Utils.bytesToHex(topic0) + "\"" + (topic1 == null ? "" : ",\"0x" + Utils.bytesToHex(topic1) + "\"") + "]";
+        return parseLogs(call("eth_getLogs", "[{\"address\":\"" + address + "\",\"fromBlock\":\"" + blockHex + "\",\"toBlock\":\"" + blockHex + "\",\"topics\":" + topics + "}]"));
+    }
+
+    private static List<Log> parseLogs(Object logs) throws IOException {
+        if(!(logs instanceof List<?> list)) {
+            throw new IOException("Invalid logs in response");
+        }
+        List<Log> parsed = new ArrayList<>();
+        for(Object item : list) {
+            if(!(item instanceof Map<?, ?> log) || !(log.get("address") instanceof String address) || !(log.get("topics") instanceof List<?> topics)
+                    || !(log.get("data") instanceof String data) || !data.startsWith("0x") || data.length() % 2 != 0) {
+                throw new IOException("Invalid log in response");
+            }
+            List<byte[]> topicBytes = new ArrayList<>();
+            for(Object topic : topics) {
+                if(!(topic instanceof String hex) || !hex.matches("0x[0-9a-fA-F]{64}")) {
+                    throw new IOException("Invalid log topic in response");
+                }
+                topicBytes.add(Utils.hexToBytes(hex.substring(2)));
+            }
+            parsed.add(new Log(EvmAddress.fromString(address), topicBytes, Utils.hexToBytes(data.substring(2))));
+        }
+        return parsed;
+    }
+
+    public record ArbBlock(BigInteger number, BigInteger sendCount, byte[] sendRoot) {}
+
+    /** An Arbitrum Nitro block's outbox state: how many L2-to-L1 messages exist as of it, and their Merkle root. */
+    public ArbBlock getArbBlock(byte[] blockHash) throws IOException {
+        Object result = call("eth_getBlockByHash", "[\"0x" + Utils.bytesToHex(blockHash) + "\",false]");
+        if(!(result instanceof Map<?, ?> map) || !(map.get("sendRoot") instanceof String root) || !root.matches("0x[0-9a-fA-F]{64}")) {
+            throw new IOException("Block " + Utils.bytesToHex(blockHash) + " not found or has no outbox state");
+        }
+        return new ArbBlock(quantity(map.get("number")), quantity(map.get("sendCount")), Utils.hexToBytes(root.substring(2)));
     }
 
     private Object call(String method, String paramsJson) throws IOException {

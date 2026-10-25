@@ -1,7 +1,8 @@
 package com.sparrowwallet.drongo.evm;
 
 /**
- * LitVM networks, Litecoin's EVM rollup.
+ * EVM networks the LitVM tab uses: LitVM, Litecoin's EVM rollup, and Sepolia, the Ethereum testnet its native
+ * zkLTC bridge settles on.
  *
  * Only the LiteForge testnet exists. As of October 2026 LitVM mainnet has no published chain id or RPC
  * endpoint, so there is deliberately no MAINNET constant: add one only once those are officially published
@@ -9,7 +10,9 @@ package com.sparrowwallet.drongo.evm;
  */
 public enum LitVmNetwork {
     LITEFORGE_TESTNET("LitVM LiteForge Testnet", 4441L, "https://liteforge.rpc.caldera.xyz/http",
-            "https://liteforge.explorer.caldera.xyz", "zkLTC", true);
+            "https://liteforge.explorer.caldera.xyz", "zkLTC", true),
+    SEPOLIA("Ethereum Sepolia", 11155111L, "https://ethereum-sepolia-rpc.publicnode.com",
+            "https://eth-sepolia.blockscout.com", "ETH", true);
 
     private final String displayName;
     private final long chainId;

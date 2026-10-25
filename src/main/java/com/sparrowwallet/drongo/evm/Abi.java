@@ -3,7 +3,9 @@ package com.sparrowwallet.drongo.evm;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * The slice of the Solidity ABI that token and bridge calls need: function selectors, static arguments (address,
@@ -13,6 +15,8 @@ import java.util.Arrays;
 public final class Abi {
     private static final int WORD = 32;
     private static final int MAX_DYNAMIC_LENGTH = 4096;
+    //An outbox proof is one hash per tree level: 64 covers 2^64 messages
+    private static final int MAX_ARRAY_LENGTH = 64;
 
     private Abi() {}
 
@@ -37,6 +41,15 @@ public final class Abi {
             } else if(arg instanceof Dynamic dynamic) {
                 head.writeBytes(uint(BigInteger.valueOf(headSize + tail.size())));
                 writeDynamic(tail, dynamic.bytes());
+            } else if(arg instanceof Bytes32Array array) {
+                head.writeBytes(uint(BigInteger.valueOf(headSize + tail.size())));
+                tail.writeBytes(uint(BigInteger.valueOf(array.items().size())));
+                for(byte[] item : array.items()) {
+                    if(item.length != WORD) {
+                        throw new IllegalArgumentException("bytes32[] item is " + item.length + " bytes");
+                    }
+                    tail.writeBytes(item);
+                }
             } else {
                 head.writeBytes(encodeStatic(arg));
             }
@@ -47,6 +60,9 @@ public final class Abi {
 
     /** Dynamic `bytes` argument (a plain byte[] means bytes32). */
     public record Dynamic(byte[] bytes) {}
+
+    /** Dynamic `bytes32[]` argument, such as an outbox Merkle proof. */
+    public record Bytes32Array(List<byte[]> items) {}
 
     private static byte[] encodeStatic(Object arg) {
         if(arg instanceof EvmAddress address) {
@@ -129,6 +145,39 @@ public final class Abi {
             throw new IllegalArgumentException("String length out of range");
         }
         return new String(result, start + WORD, length.intValue(), StandardCharsets.UTF_8);
+    }
+
+    /** A dynamic `bytes32[]` whose offset sits in word `index`. */
+    public static List<byte[]> decodeBytes32Array(byte[] result, int index) {
+        int start = dynamicStart(result, index);
+        BigInteger count = new BigInteger(1, Arrays.copyOfRange(result, start, start + WORD));
+        if(count.bitLength() > 31 || count.intValue() > MAX_ARRAY_LENGTH || start + WORD * (1L + count.intValue()) > result.length) {
+            throw new IllegalArgumentException("Array length out of range");
+        }
+        List<byte[]> items = new ArrayList<>();
+        for(int i = 0; i < count.intValue(); i++) {
+            int item = start + WORD * (1 + i);
+            items.add(Arrays.copyOfRange(result, item, item + WORD));
+        }
+        return items;
+    }
+
+    /** A dynamic `bytes` whose offset sits in word `index`. */
+    public static byte[] decodeBytes(byte[] result, int index) {
+        int start = dynamicStart(result, index);
+        BigInteger length = new BigInteger(1, Arrays.copyOfRange(result, start, start + WORD));
+        if(length.bitLength() > 31 || length.intValue() > MAX_DYNAMIC_LENGTH || start + WORD + length.intValue() > result.length) {
+            throw new IllegalArgumentException("Bytes length out of range");
+        }
+        return Arrays.copyOfRange(result, start + WORD, start + WORD + length.intValue());
+    }
+
+    private static int dynamicStart(byte[] result, int index) {
+        BigInteger offset = decodeUint(result, index);
+        if(offset.bitLength() > 31 || offset.intValue() + WORD > result.length) {
+            throw new IllegalArgumentException("Offset out of range");
+        }
+        return offset.intValue();
     }
 
     private static byte[] word(byte[] result, int index) {

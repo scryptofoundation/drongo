@@ -135,9 +135,12 @@ public class EvmTest {
     }
 
     @Test
-    public void onlyTheLiteForgeTestnetIsDefined() {
-        Assertions.assertEquals(1, LitVmNetwork.values().length);
+    public void onlyTestnetsAreDefined() {
+        Assertions.assertEquals(2, LitVmNetwork.values().length);
         Assertions.assertEquals(4441L, LitVmNetwork.LITEFORGE_TESTNET.getChainId());
-        Assertions.assertTrue(LitVmNetwork.LITEFORGE_TESTNET.isTestnet());
+        Assertions.assertEquals(11155111L, LitVmNetwork.SEPOLIA.getChainId());
+        for(LitVmNetwork network : LitVmNetwork.values()) {
+            Assertions.assertTrue(network.isTestnet());
+        }
     }
 }
