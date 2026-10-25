@@ -122,6 +122,18 @@ public class EvmTest {
         Assertions.assertEquals(BigInteger.ZERO, LitVmRpcClient.quantity("0x0"));
     }
 
+    /** RPC responses are untrusted: bounded nesting, no exponent or oversized numbers, hex-only 256-bit quantities. */
+    @Test
+    public void untrustedRpcInputIsBounded() {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("[".repeat(100) + "]".repeat(100)));
+        Assertions.assertDoesNotThrow(() -> MiniJson.parse("[".repeat(10) + "]".repeat(10)));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("{\"result\":1e999999999}"));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("{\"result\":" + "9".repeat(200) + "}"));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> LitVmRpcClient.quantity(new java.math.BigDecimal("12")));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> LitVmRpcClient.quantity("0x" + "f".repeat(65)));
+        Assertions.assertEquals(BigInteger.TWO.pow(256).subtract(BigInteger.ONE), LitVmRpcClient.quantity("0x" + "f".repeat(64)));
+    }
+
     @Test
     public void onlyTheLiteForgeTestnetIsDefined() {
         Assertions.assertEquals(1, LitVmNetwork.values().length);

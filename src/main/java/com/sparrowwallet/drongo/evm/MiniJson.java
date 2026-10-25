@@ -11,8 +11,14 @@ import java.util.Map;
  * Objects become LinkedHashMap, arrays ArrayList, numbers BigDecimal; strings, booleans and null as usual.
  */
 final class MiniJson {
+    //Bounds on untrusted RPC input: nesting deep enough to overflow the stack, or a number token like 1e999999999
+    //whose conversion to an integer would exhaust memory, are rejected rather than parsed
+    private static final int MAX_DEPTH = 64;
+    private static final int MAX_NUMBER_LENGTH = 80;
+
     private final String s;
     private int pos;
+    private int depth;
 
     private MiniJson(String s) {
         this.s = s;
@@ -34,9 +40,12 @@ final class MiniJson {
             throw error("Unexpected end");
         }
         char c = s.charAt(pos);
+        if((c == '{' || c == '[') && ++depth > MAX_DEPTH) {
+            throw error("Nesting too deep");
+        }
         switch(c) {
-            case '{': return object();
-            case '[': return array();
+            case '{': try { return object(); } finally { depth--; }
+            case '[': try { return array(); } finally { depth--; }
             case '"': return string();
             case 't': expect("true"); return Boolean.TRUE;
             case 'f': expect("false"); return Boolean.FALSE;
@@ -133,7 +142,11 @@ final class MiniJson {
         if(start == pos) {
             throw error("Unexpected character");
         }
-        return new BigDecimal(s.substring(start, pos));
+        String token = s.substring(start, pos);
+        if(token.length() > MAX_NUMBER_LENGTH || token.indexOf('e') >= 0 || token.indexOf('E') >= 0) {
+            throw error("Number out of range");
+        }
+        return new BigDecimal(token);
     }
 
     private void expect(String word) {

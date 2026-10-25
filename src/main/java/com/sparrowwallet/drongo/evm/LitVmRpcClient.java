@@ -99,6 +99,14 @@ public final class LitVmRpcClient {
         BigInteger gas = estimateGas(from, to, value, null);
         //A margin on the estimate; unused gas is not charged.
         BigInteger gasLimit = gas.multiply(BigInteger.valueOf(12)).divide(BigInteger.TEN);
+        //The fee inputs come from the node. Bound them so a faulty or hostile node cannot set an absurd fee for the
+        //user to sign. Not 21000: on an Arbitrum Nitro chain like LitVM the estimate includes the L1 data cost.
+        if(gasLimit.compareTo(MAX_TRANSFER_GAS) > 0) {
+            throw new IOException("Node estimated " + gas + " gas for a plain transfer, above the " + MAX_TRANSFER_GAS + " limit");
+        }
+        if(maxFee.compareTo(MAX_FEE_PER_GAS) > 0 || priority.compareTo(maxFee) > 0) {
+            throw new IOException("Node reported an implausible fee (max " + maxFee + " wei/gas, priority " + priority + ")");
+        }
         return new Eip1559Transaction(network.getChainId(), nonce, priority, maxFee, gasLimit, to, value, null);
     }
 
@@ -108,7 +116,13 @@ public final class LitVmRpcClient {
             verifyChain();
         }
         Object result = call("eth_sendRawTransaction", "[\"" + signed.rawHex() + "\"]");
-        return String.valueOf(result);
+        //The hash is ours to compute: a node reporting a different one is wrong or lying, and its value would then be
+        //what the user tracks. Return the local hash, and refuse a mismatch rather than trusting either silently.
+        String local = signed.hashHex();
+        if(!(result instanceof String reported) || !reported.equalsIgnoreCase(local)) {
+            throw new IOException("Node returned transaction hash " + result + " but the transaction hashes to " + local);
+        }
+        return local;
     }
 
     public record Receipt(boolean success, BigInteger blockNumber, BigInteger gasUsed) {}
@@ -141,6 +155,10 @@ public final class LitVmRpcClient {
         if(response.statusCode() / 100 != 2) {
             throw new IOException(method + " failed with HTTP " + response.statusCode());
         }
+        //None of the calls made here return more than a receipt; anything far larger is not a real answer
+        if(response.body().length() > MAX_RESPONSE_CHARS) {
+            throw new IOException(method + " returned an oversized response");
+        }
         Object parsed = MiniJson.parse(response.body());
         if(!(parsed instanceof Map<?, ?> map)) {
             throw new IOException(method + " returned a non-object response");
@@ -151,12 +169,17 @@ public final class LitVmRpcClient {
         return map.get("result");
     }
 
+    private static final int MAX_RESPONSE_CHARS = 1_000_000;
+    //Upper bounds for a plain value transfer; LiteForge measured ~1.1 gwei base fee and well under 1M gas
+    private static final BigInteger MAX_TRANSFER_GAS = BigInteger.valueOf(2_000_000);
+    private static final BigInteger MAX_FEE_PER_GAS = BigInteger.valueOf(1_000L).multiply(BigInteger.TEN.pow(9)); //1000 gwei
+    //A 256-bit quantity is at most 64 hex digits
+    private static final int MAX_QUANTITY_HEX_DIGITS = 64;
+
+    /** A JSON-RPC quantity: 0x-prefixed hex, as the spec requires, of at most 256 bits. */
     static BigInteger quantity(Object value) {
-        if(value instanceof String hex && hex.startsWith("0x")) {
+        if(value instanceof String hex && hex.startsWith("0x") && hex.length() - 2 <= MAX_QUANTITY_HEX_DIGITS) {
             return hex.length() == 2 ? BigInteger.ZERO : new BigInteger(hex.substring(2), 16);
-        }
-        if(value instanceof BigDecimal number) {
-            return number.toBigIntegerExact();
         }
         throw new IllegalArgumentException("Not a JSON-RPC quantity: " + value);
     }
