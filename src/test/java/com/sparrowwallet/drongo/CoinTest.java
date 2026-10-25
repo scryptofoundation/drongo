@@ -453,7 +453,8 @@ public class CoinTest {
         Assertions.assertEquals(19771, testnet.defaultPort());
         Assertions.assertEquals(ExtendedKey.Header.tpub, testnet.xpubHeader());
         Assertions.assertEquals(ExtendedKey.Header.tprv, testnet.xprvHeader());
-        Assertions.assertNull(testnet.bech32AddressHrp());
+        Assertions.assertEquals("tjc", testnet.bech32AddressHrp());
+        Assertions.assertNull(Coin.JUNKCOIN.params(Network.MAINNET).bech32AddressHrp());
     }
 
     /**

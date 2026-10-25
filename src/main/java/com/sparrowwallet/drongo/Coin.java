@@ -216,7 +216,10 @@ public enum Coin {
                 //mainnet's; block 1 (ccedee1f...) tells them apart. Core serialises testnet keys as dgub/dgpv,
                 //but those headers are mainnet-only here, so a testnet wallet saved as dgub could not be read
                 //back - keys use the standard tpub/tprv instead. Addresses do not depend on the key prefix.
-                case TESTNET -> new ChainParams(111, "mn", 5, "3", null, null, null,
+                //Bech32 "tjc": segwit is active from testnet block 140000 and taproot from 160000 (v4
+                //chainparams), and the Junkcoin bridge custody is a tjc1p address. Mainnet stays without one
+                //until its scheduled segwit height (1145000) has passed.
+                case TESTNET -> new ChainParams(111, "mn", 5, "3", "tjc", null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19771);
                 default -> throw unverified(network);
             };
