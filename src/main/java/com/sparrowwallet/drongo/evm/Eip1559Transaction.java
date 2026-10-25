@@ -88,6 +88,7 @@ public final class Eip1559Transaction {
     public BigInteger getGasLimit() { return gasLimit; }
     public EvmAddress getTo() { return to; }
     public BigInteger getValue() { return value; }
+    public byte[] getData() { return data == null ? null : data.clone(); }
 
     /** A signed transaction ready to broadcast, with its hash and the sender recovered from the signature. */
     public record Signed(byte[] raw, byte[] hash, EvmAddress from) {
