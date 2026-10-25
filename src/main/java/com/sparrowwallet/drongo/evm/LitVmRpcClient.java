@@ -93,21 +93,75 @@ public final class LitVmRpcClient {
 
     /** A ready-to-sign plain transfer with fees taken from the chain: maxFee = 2 x baseFee + priority fee. */
     public Eip1559Transaction prepareTransfer(EvmAddress from, EvmAddress to, BigInteger value) throws IOException {
+        return prepareCall(from, to, value, null);
+    }
+
+    /** A ready-to-sign ERC-20 transfer: a call to the token contract, carrying no native value. */
+    public Eip1559Transaction prepareTokenTransfer(EvmAddress from, Erc20Token token, EvmAddress to, BigInteger amount) throws IOException {
+        return prepareCall(from, token.contract(), BigInteger.ZERO, Abi.encodeCall("transfer(address,uint256)", to, amount));
+    }
+
+    /** eth_call against the latest block: the raw return data of a read-only contract call. */
+    public byte[] ethCall(EvmAddress to, byte[] data) throws IOException {
+        Object result = call("eth_call", "[{\"to\":\"" + to + "\",\"data\":\"0x" + com.sparrowwallet.drongo.Utils.bytesToHex(data) + "\"},\"latest\"]");
+        if(!(result instanceof String hex) || !hex.startsWith("0x") || hex.length() % 2 != 0 || hex.length() > MAX_CALL_RESULT_HEX) {
+            throw new IOException("eth_call returned an invalid result");
+        }
+        return com.sparrowwallet.drongo.Utils.hexToBytes(hex.substring(2));
+    }
+
+    /** Reads an ERC-20 contract's metadata; fails if the address holds no contract or does not answer decimals(). */
+    public Erc20Token readToken(EvmAddress contract) throws IOException {
+        Object code = call("eth_getCode", "[\"" + contract + "\",\"latest\"]");
+        if(!(code instanceof String hex) || hex.length() <= 2) {
+            throw new IOException("No contract at " + contract);
+        }
+        try {
+            BigInteger decimals = Abi.decodeUint(ethCall(contract, Abi.selector("decimals()")), 0);
+            if(decimals.compareTo(BigInteger.valueOf(Erc20Token.MAX_DECIMALS)) > 0) {
+                throw new IOException("Token decimals out of range: " + decimals);
+            }
+            String symbol = optionalString(contract, "symbol()");
+            String name = optionalString(contract, "name()");
+            return new Erc20Token(contract, symbol, name, decimals.intValue());
+        } catch(IllegalArgumentException e) {
+            throw new IOException(contract + " is not an ERC-20 token: " + e.getMessage());
+        }
+    }
+
+    private String optionalString(EvmAddress contract, String signature) {
+        try {
+            return Abi.decodeString(ethCall(contract, Abi.selector(signature)));
+        } catch(IOException | IllegalArgumentException e) {
+            return "";
+        }
+    }
+
+    public BigInteger getTokenBalance(Erc20Token token, EvmAddress owner) throws IOException {
+        try {
+            return Abi.decodeUint(ethCall(token.contract(), Abi.encodeCall("balanceOf(address)", owner)), 0);
+        } catch(IllegalArgumentException e) {
+            throw new IOException("Invalid balanceOf result from " + token.contract());
+        }
+    }
+
+    /** A ready-to-sign call (plain transfer when data is null) with fees taken from the chain and bounded. */
+    public Eip1559Transaction prepareCall(EvmAddress from, EvmAddress to, BigInteger value, byte[] data) throws IOException {
         BigInteger nonce = getPendingNonce(from);
         BigInteger priority = getMaxPriorityFee();
         BigInteger maxFee = getBaseFee().multiply(BigInteger.TWO).add(priority);
-        BigInteger gas = estimateGas(from, to, value, null);
+        BigInteger gas = estimateGas(from, to, value, data);
         //A margin on the estimate; unused gas is not charged.
         BigInteger gasLimit = gas.multiply(BigInteger.valueOf(12)).divide(BigInteger.TEN);
         //The fee inputs come from the node. Bound them so a faulty or hostile node cannot set an absurd fee for the
         //user to sign. Not 21000: on an Arbitrum Nitro chain like LitVM the estimate includes the L1 data cost.
         if(gasLimit.compareTo(MAX_TRANSFER_GAS) > 0) {
-            throw new IOException("Node estimated " + gas + " gas for a plain transfer, above the " + MAX_TRANSFER_GAS + " limit");
+            throw new IOException("Node estimated " + gas + " gas, above the " + MAX_TRANSFER_GAS + " limit");
         }
         if(maxFee.compareTo(MAX_FEE_PER_GAS) > 0 || priority.compareTo(maxFee) > 0) {
             throw new IOException("Node reported an implausible fee (max " + maxFee + " wei/gas, priority " + priority + ")");
         }
-        return new Eip1559Transaction(network.getChainId(), nonce, priority, maxFee, gasLimit, to, value, null);
+        return new Eip1559Transaction(network.getChainId(), nonce, priority, maxFee, gasLimit, to, value, data);
     }
 
     /** Broadcasts a signed transaction and returns its hash. Requires a prior successful {@link #verifyChain()}. */
@@ -172,6 +226,8 @@ public final class LitVmRpcClient {
     private static final int MAX_RESPONSE_CHARS = 1_000_000;
     //Upper bounds for a plain value transfer; LiteForge measured ~1.1 gwei base fee and well under 1M gas
     private static final BigInteger MAX_TRANSFER_GAS = BigInteger.valueOf(2_000_000);
+    //A token metadata or balance result is a few words; anything far larger is not a real answer
+    private static final int MAX_CALL_RESULT_HEX = 2 + 2 * 8192;
     private static final BigInteger MAX_FEE_PER_GAS = BigInteger.valueOf(1_000L).multiply(BigInteger.TEN.pow(9)); //1000 gwei
     //A 256-bit quantity is at most 64 hex digits
     private static final int MAX_QUANTITY_HEX_DIGITS = 64;
