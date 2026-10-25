@@ -46,6 +46,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     private final Map<TableType, WalletTable> walletTables = new HashMap<>();
     private final Map<Address, SilentPaymentAddress> silentPaymentAddresses = new HashMap<>();
     private MixConfig mixConfig;
+    private LitVmLink litVmLink;
     private final Map<Sha256Hash, UtxoMixData> utxoMixes = new HashMap<>();
     private Integer storedBlockHeight;
     private Integer gapLimit;
@@ -575,6 +576,15 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
 
     public void setWalletConfig(WalletConfig walletConfig) {
         this.walletConfig = walletConfig;
+    }
+
+    /** The LitVM account linked to this (master) wallet, or null when none is linked. */
+    public LitVmLink getLitVmLink() {
+        return litVmLink;
+    }
+
+    public void setLitVmLink(LitVmLink litVmLink) {
+        this.litVmLink = litVmLink;
     }
 
     public Map<TableType, WalletTable> getWalletTables() {
@@ -2313,6 +2323,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         }
         copy.setWalletConfig(walletConfig == null ? null : walletConfig.copy());
         copy.setMixConfig(mixConfig == null ? null : mixConfig.copy());
+        copy.setLitVmLink(litVmLink == null ? null : litVmLink.copy());
         copy.setStoredBlockHeight(getStoredBlockHeight());
         copy.gapLimit = gapLimit;
         copy.watchLast = watchLast;
@@ -2348,6 +2359,10 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             }
         }
 
+        if(litVmLink != null && litVmLink.isEncrypted()) {
+            return true;
+        }
+
         for(Wallet childWallet : getChildWallets()) {
             if(childWallet.isNested() && childWallet.isEncrypted()) {
                 return true;
@@ -2362,6 +2377,10 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             keystore.encrypt(key);
         }
 
+        if(litVmLink != null) {
+            litVmLink = litVmLink.encrypt(key);
+        }
+
         for(Wallet childWallet : getChildWallets()) {
             if(childWallet.isNested()) {
                 childWallet.encrypt(key);
@@ -2372,6 +2391,10 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     public void decrypt(CharSequence password) {
         for(Keystore keystore : keystores) {
             keystore.decrypt(password);
+        }
+
+        if(litVmLink != null) {
+            litVmLink = litVmLink.decrypt(password);
         }
 
         for(Wallet childWallet : getChildWallets()) {
@@ -2386,6 +2409,10 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             keystore.decrypt(key);
         }
 
+        if(litVmLink != null) {
+            litVmLink = litVmLink.decrypt(key);
+        }
+
         for(Wallet childWallet : getChildWallets()) {
             if(childWallet.isNested()) {
                 childWallet.decrypt(key);
@@ -2396,6 +2423,10 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     public void clearPrivate() {
         for(Keystore keystore : keystores) {
             keystore.clearPrivate();
+        }
+
+        if(litVmLink != null) {
+            litVmLink.clear();
         }
 
         for(Wallet childWallet : getChildWallets()) {
