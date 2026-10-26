@@ -415,6 +415,23 @@ public enum Coin {
         };
     }
 
+    /**
+     * Confirmations a coinbase output needs before it can be spent, judged by the height of the block that mined it.
+     * From each chain's chainparams (nCoinbaseMaturity, with Dogecoin's switch to 240 at its Digishield height 145000);
+     * coins not verified yet keep Bitcoin's and Litecoin's 100.
+     */
+    public int getCoinbaseMaturity(Network network, int coinbaseHeight) {
+        return switch(this) {
+            //dogecoin/dogecoin v1.14.9 chainparams: consensus 30, digishieldConsensus 240 from 145000 (main and test)
+            case DOGECOIN -> coinbaseHeight < 145000 ? 30 : 240;
+            //junkcoin-core v4 chainparams: mainnet 70, testnet 30
+            case JUNKCOIN -> network == Network.MAINNET ? 70 : 30;
+            //Luckycoin v5.0.1 chainparams: 70 on every network and consensus era
+            case LUCKYCOIN -> 70;
+            default -> 100;
+        };
+    }
+
     public boolean isSegwitSupported() {
         return segwit;
     }

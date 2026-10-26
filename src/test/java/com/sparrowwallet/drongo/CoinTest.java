@@ -483,6 +483,17 @@ public class CoinTest {
     }
 
     @Test
+    public void testCoinbaseMaturity() {
+        Assertions.assertEquals(100, Coin.LITECOIN.getCoinbaseMaturity(Network.MAINNET, 1));
+        Assertions.assertEquals(30, Coin.DOGECOIN.getCoinbaseMaturity(Network.TESTNET, 144999));
+        Assertions.assertEquals(240, Coin.DOGECOIN.getCoinbaseMaturity(Network.MAINNET, 145000));
+        Assertions.assertEquals(70, Coin.JUNKCOIN.getCoinbaseMaturity(Network.MAINNET, 1));
+        Assertions.assertEquals(30, Coin.JUNKCOIN.getCoinbaseMaturity(Network.TESTNET, 254068));
+        Assertions.assertEquals(70, Coin.LUCKYCOIN.getCoinbaseMaturity(Network.TESTNET, 25));
+        Assertions.assertEquals(100, Coin.PEPECOIN.getCoinbaseMaturity(Network.MAINNET, 1), "unverified coins keep 100");
+    }
+
+    @Test
     public void testSupportedCanonicalValues() {
         Assertions.assertArrayEquals(Network.canonicalValues(), Coin.LITECOIN.supportedCanonicalValues());
         Assertions.assertArrayEquals(new Network[]{Network.MAINNET, Network.TESTNET}, Coin.JUNKCOIN.supportedCanonicalValues());
