@@ -15,6 +15,7 @@ final class MiniJson {
     //whose conversion to an integer would exhaust memory, are rejected rather than parsed
     private static final int MAX_DEPTH = 64;
     private static final int MAX_NUMBER_LENGTH = 80;
+    private static final int MAX_SCALE = 100;
 
     private final String s;
     private int pos;
@@ -143,10 +144,20 @@ final class MiniJson {
             throw error("Unexpected character");
         }
         String token = s.substring(start, pos);
-        if(token.length() > MAX_NUMBER_LENGTH || token.indexOf('e') >= 0 || token.indexOf('E') >= 0) {
+        if(token.length() > MAX_NUMBER_LENGTH) {
             throw error("Number out of range");
         }
-        return new BigDecimal(token);
+        BigDecimal number;
+        try {
+            number = new BigDecimal(token);
+        } catch(NumberFormatException e) {
+            throw error("Malformed number");
+        }
+        //Explorer APIs write rates and ratios with exponents; only a small exponent is safe to convert later
+        if(Math.abs(number.scale()) > MAX_SCALE) {
+            throw error("Number out of range");
+        }
+        return number;
     }
 
     private void expect(String word) {

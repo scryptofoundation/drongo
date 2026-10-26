@@ -122,12 +122,15 @@ public class EvmTest {
         Assertions.assertEquals(BigInteger.ZERO, LitVmRpcClient.quantity("0x0"));
     }
 
-    /** RPC responses are untrusted: bounded nesting, no exponent or oversized numbers, hex-only 256-bit quantities. */
+    /** RPC responses are untrusted: bounded nesting, no large exponent or oversized numbers, hex-only 256-bit quantities. */
     @Test
     public void untrustedRpcInputIsBounded() {
         Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("[".repeat(100) + "]".repeat(100)));
         Assertions.assertDoesNotThrow(() -> MiniJson.parse("[".repeat(10) + "]".repeat(10)));
         Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("{\"result\":1e999999999}"));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("{\"result\":1e-999999999}"));
+        Assertions.assertEquals(new java.math.BigDecimal("1.5E-7"), MiniJson.parse("1.5e-7"));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("1.2.3"));
         Assertions.assertThrows(IllegalArgumentException.class, () -> MiniJson.parse("{\"result\":" + "9".repeat(200) + "}"));
         Assertions.assertThrows(IllegalArgumentException.class, () -> LitVmRpcClient.quantity(new java.math.BigDecimal("12")));
         Assertions.assertThrows(IllegalArgumentException.class, () -> LitVmRpcClient.quantity("0x" + "f".repeat(65)));
