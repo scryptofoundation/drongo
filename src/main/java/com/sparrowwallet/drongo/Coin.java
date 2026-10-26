@@ -102,18 +102,13 @@ public enum Coin {
     public boolean supports(Network network) {
         return switch(this) {
             case LITECOIN -> true;
-            //A coin is offered on testnet only when its testnet parameters are verified against its own
-            //chainparams AND the testnet is alive with a public server to sync from. Luckycoin's testnet is
-            //dead (no seeds, nodes or servers answer). Bellscoin's live testnet runs BellsChain's params, not
-            //the Nintondo idquantum-dev params this mainnet uses, and has not produced a block since 2026-07.
-            //Dingocoin's testnet is dead (seed gone, the one answering node is at height 0). Dogecoin's testnet
-            //chain is alive (2026-10-23, ~68M) but no public Electrum or REST server serves it, so a wallet
-            //would have nothing to sync from by default. It is offered anyway (2026-10-26) for testing against your
-            //own node: Dogecoin Core with an Electrum server, set as the coin's server in test mode.
-            //Luckycoin likewise (2026-10-26): its public testnet is dead, so it is tested on a private chain mined
-            //from the testnet genesis by your own Luckycoin node, with an Electrum server in front of it.
-            case JUNKCOIN, PEPECOIN, DOGECOIN, LUCKYCOIN -> network == Network.MAINNET || network == Network.TESTNET;
-            case BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
+            //A coin is offered on testnet only when its testnet parameters are verified against its own chainparams.
+            //Litecoin, Pepecoin and Junkcoin have live public testnets with public servers. The others have none
+            //usable (2026-10-26): Dogecoin's testnet is alive but no public Electrum or REST server serves it;
+            //Luckycoin's and Dingocoin's are dead; Bellscoin's (Bells Core v3 params) has stalled. They are
+            //offered for testing against your own node (a private chain mined from the testnet genesis) with an
+            //Electrum server in front of it, set as the coin's server in test mode.
+            case JUNKCOIN, PEPECOIN, DOGECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET || network == Network.TESTNET;
         };
     }
 
@@ -207,6 +202,12 @@ public enum Coin {
             case BELLSCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(25, "B", 30, "D", null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 153, 8332);
+                //Testnet as Bells Core v3, which the live network runs (BellsChain/bellscoin v3.0.0-rc2 @59addbbe
+                //kernel/chainparams.cpp CTestNetParams, chainparamsbase.cpp): P2PKH 33 "E", P2SH 22 "9A", WIF 158,
+                //bech32 "tbel", RPC 18332. Core keeps mainnet's dgub/dgpv on testnet, but those headers are mainnet-only
+                //here (as for Junkcoin), so testnet keys use tpub/tprv; addresses do not depend on the key prefix.
+                case TESTNET -> new ChainParams(33, "E", 22, "9A", "tbel", null, null,
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 158, 18332);
                 default -> throw unverified(network);
             };
             //Dingocoin: address/key identity identical to Dogecoin (P2PKH 30 "D", P2SH 22 "9A", WIF 158,
@@ -214,6 +215,10 @@ public enum Coin {
             case DINGOCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 34646);
+                //Testnet (dingocoin/dingocoin v1.18.1.1 @ce1acdab chainparams.cpp CTestNetParams, chainparamsbase.cpp
+                //L48): P2PKH 113 "n", P2SH 196 "2", WIF 241, standard tpub/tprv, RPC 44556.
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 44556);
                 default -> throw unverified(network);
             };
             //Junkcoin: verified against Junkcoin-Foundation/junkcoin-core chainparams.cpp. Standard
@@ -428,6 +433,10 @@ public enum Coin {
             case JUNKCOIN -> network == Network.MAINNET ? 70 : 30;
             //Luckycoin v5.0.1 chainparams: 70 on every network and consensus era
             case LUCKYCOIN -> 70;
+            //Bells Core v3 consensus.h: COINBASE_MATURITY = 30 for every network
+            case BELLSCOIN -> 30;
+            //dingocoin v1.18.1.1 chainparams testnet: 30, digishieldConsensus 240 from 5000 (mainnet not verified yet)
+            case DINGOCOIN -> network == Network.MAINNET ? 100 : (coinbaseHeight < 5000 ? 30 : 240);
             default -> 100;
         };
     }

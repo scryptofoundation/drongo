@@ -432,8 +432,8 @@ public class CoinTest {
         Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.PEPECOIN));
         Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.DOGECOIN));
         Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.LUCKYCOIN));
-        Assertions.assertFalse(Coin.availableOn(Network.TESTNET).contains(Coin.BELLSCOIN));
-        Assertions.assertFalse(Coin.availableOn(Network.TESTNET).contains(Coin.DINGOCOIN));
+        Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.BELLSCOIN));
+        Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.DINGOCOIN));
         Coin.ChainParams pep = Coin.PEPECOIN.params(Network.TESTNET);
         Assertions.assertEquals(113, pep.p2pkhAddressHeader());
         Assertions.assertEquals(196, pep.p2shAddressHeader());
@@ -490,6 +490,9 @@ public class CoinTest {
         Assertions.assertEquals(70, Coin.JUNKCOIN.getCoinbaseMaturity(Network.MAINNET, 1));
         Assertions.assertEquals(30, Coin.JUNKCOIN.getCoinbaseMaturity(Network.TESTNET, 254068));
         Assertions.assertEquals(70, Coin.LUCKYCOIN.getCoinbaseMaturity(Network.TESTNET, 25));
+        Assertions.assertEquals(30, Coin.BELLSCOIN.getCoinbaseMaturity(Network.MAINNET, 1));
+        Assertions.assertEquals(30, Coin.DINGOCOIN.getCoinbaseMaturity(Network.TESTNET, 4999));
+        Assertions.assertEquals(240, Coin.DINGOCOIN.getCoinbaseMaturity(Network.TESTNET, 5000));
         Assertions.assertEquals(100, Coin.PEPECOIN.getCoinbaseMaturity(Network.MAINNET, 1), "unverified coins keep 100");
     }
 
@@ -510,9 +513,19 @@ public class CoinTest {
         Assertions.assertEquals(196, lkyTestnet.p2shAddressHeader());
         Assertions.assertEquals(241, lkyTestnet.dumpedPrivateKeyHeader());
         Assertions.assertEquals(19918, lkyTestnet.defaultPort());
-        for(Coin coin : new Coin[]{Coin.BELLSCOIN, Coin.DINGOCOIN}) {
-            Assertions.assertArrayEquals(new Network[]{Network.MAINNET}, coin.supportedCanonicalValues(),
-                    coin + " should expose only mainnet until other networks are verified");
+        Coin.ChainParams dingoTestnet = Coin.DINGOCOIN.params(Network.TESTNET);
+        Assertions.assertEquals(113, dingoTestnet.p2pkhAddressHeader());
+        Assertions.assertEquals(196, dingoTestnet.p2shAddressHeader());
+        Assertions.assertEquals(241, dingoTestnet.dumpedPrivateKeyHeader());
+        Assertions.assertEquals(44556, dingoTestnet.defaultPort());
+        Coin.ChainParams bellsTestnet = Coin.BELLSCOIN.params(Network.TESTNET);
+        Assertions.assertEquals(33, bellsTestnet.p2pkhAddressHeader());
+        Assertions.assertEquals(22, bellsTestnet.p2shAddressHeader());
+        Assertions.assertEquals(158, bellsTestnet.dumpedPrivateKeyHeader());
+        Assertions.assertEquals("tbel", bellsTestnet.bech32AddressHrp());
+        Assertions.assertEquals(18332, bellsTestnet.defaultPort());
+        for(Coin coin : Coin.values()) {
+            Assertions.assertTrue(coin.supports(Network.TESTNET), coin + " has verified testnet params");
         }
     }
 
