@@ -17,6 +17,9 @@ import java.util.*;
  */
 public final class BlockscoutClient {
     private static final int MAX_RESPONSE_CHARS = 4_000_000;
+    //Blockscout lists some native-coin movements (faucet payouts, OP Stack deposits) a second time as transfers of this
+    //metadata-less address; the native value is already on the transaction, so these are skipped
+    private static final EvmAddress NATIVE_PLACEHOLDER = EvmAddress.fromString("0xfffffffffffffffffffffffffffffffffffffffe");
 
     private final LitVmNetwork network;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
@@ -115,10 +118,12 @@ public final class BlockscoutClient {
         }
         EvmAddress contract = address(token.get("address_hash") != null ? Map.of("hash", token.get("address_hash")) : Map.of("hash", String.valueOf(token.get("address"))));
         BigInteger decimals = amount(token.get("decimals"));
-        if(contract == null || decimals.bitLength() > 7 || decimals.intValue() > Erc20Token.MAX_DECIMALS) {
+        if(contract == null || contract.equals(NATIVE_PLACEHOLDER) || decimals.bitLength() > 7 || decimals.intValue() > Erc20Token.MAX_DECIMALS) {
             return null;
         }
-        String symbol = token.get("symbol") instanceof String s ? Erc20Token.sanitise(s, 16) : "?";
+        String text = contract.toString();
+        String symbol = token.get("symbol") instanceof String s && !s.isBlank() ? Erc20Token.sanitise(s, 16)
+                : "units of " + text.substring(0, 6) + "..." + text.substring(text.length() - 4);
         return new TokenTransfer(contract, symbol, decimals.intValue(), address(map.get("from")), address(map.get("to")), amount(total.get("value")));
     }
 
