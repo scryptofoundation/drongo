@@ -110,8 +110,10 @@ public enum Coin {
             //chain is alive (2026-10-23, ~68M) but no public Electrum or REST server serves it, so a wallet
             //would have nothing to sync from by default. It is offered anyway (2026-10-26) for testing against your
             //own node: Dogecoin Core with an Electrum server, set as the coin's server in test mode.
-            case JUNKCOIN, PEPECOIN, DOGECOIN -> network == Network.MAINNET || network == Network.TESTNET;
-            case LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
+            //Luckycoin likewise (2026-10-26): its public testnet is dead, so it is tested on a private chain mined
+            //from the testnet genesis by your own Luckycoin node, with an Electrum server in front of it.
+            case JUNKCOIN, PEPECOIN, DOGECOIN, LUCKYCOIN -> network == Network.MAINNET || network == Network.TESTNET;
+            case BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
         };
     }
 
@@ -194,6 +196,10 @@ public enum Coin {
             case LUCKYCOIN -> switch(network) {
                 case MAINNET -> new ChainParams(47, "KL", 5, "3", null, null, null,
                         ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 175, 9918);
+                //Testnet (LuckycoinFoundation/Luckycoin v5.0.1 @8b1fa2b chainparams.cpp L320-324, chainparamsbase.cpp
+                //L48): P2PKH 113 "n", P2SH 196 "2", WIF 241, standard tpub/tprv, RPC 19918.
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 19918);
                 default -> throw unverified(network);
             };
             //Bellscoin: Nintondo revival (params from the idquantum-dev branch, NOT master which is

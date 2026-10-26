@@ -430,8 +430,10 @@ public class CoinTest {
         Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.LITECOIN));
         Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.JUNKCOIN));
         Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.PEPECOIN));
-        Assertions.assertFalse(Coin.availableOn(Network.TESTNET).contains(Coin.LUCKYCOIN));
+        Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.DOGECOIN));
+        Assertions.assertTrue(Coin.availableOn(Network.TESTNET).contains(Coin.LUCKYCOIN));
         Assertions.assertFalse(Coin.availableOn(Network.TESTNET).contains(Coin.BELLSCOIN));
+        Assertions.assertFalse(Coin.availableOn(Network.TESTNET).contains(Coin.DINGOCOIN));
         Coin.ChainParams pep = Coin.PEPECOIN.params(Network.TESTNET);
         Assertions.assertEquals(113, pep.p2pkhAddressHeader());
         Assertions.assertEquals(196, pep.p2shAddressHeader());
@@ -491,7 +493,13 @@ public class CoinTest {
         Assertions.assertEquals(196, dogeTestnet.p2shAddressHeader());
         Assertions.assertEquals(241, dogeTestnet.dumpedPrivateKeyHeader());
         Assertions.assertEquals(44555, dogeTestnet.defaultPort());
-        for(Coin coin : new Coin[]{Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
+        Assertions.assertArrayEquals(new Network[]{Network.MAINNET, Network.TESTNET}, Coin.LUCKYCOIN.supportedCanonicalValues());
+        Coin.ChainParams lkyTestnet = Coin.LUCKYCOIN.params(Network.TESTNET);
+        Assertions.assertEquals(113, lkyTestnet.p2pkhAddressHeader());
+        Assertions.assertEquals(196, lkyTestnet.p2shAddressHeader());
+        Assertions.assertEquals(241, lkyTestnet.dumpedPrivateKeyHeader());
+        Assertions.assertEquals(19918, lkyTestnet.defaultPort());
+        for(Coin coin : new Coin[]{Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Assertions.assertArrayEquals(new Network[]{Network.MAINNET}, coin.supportedCanonicalValues(),
                     coin + " should expose only mainnet until other networks are verified");
         }
