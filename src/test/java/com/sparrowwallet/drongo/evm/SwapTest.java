@@ -54,6 +54,7 @@ public class SwapTest {
         SwapVenue.Call call = new UniswapV3Venue().swapCall(quote, ME, BigInteger.valueOf(990), 1_800_000_000L);
         Assertions.assertEquals(UniswapV3Venue.ROUTER, call.to());
         Assertions.assertEquals(BigInteger.valueOf(100), call.value(), "native input is sent as value");
+        Assertions.assertTrue(Utils.bytesToHex(call.data()).contains("12210e8a"), "native input ends with refundETH so a partial fill strands nothing");
 
         SwapVenue.Quote back = new SwapVenue.Quote(UniswapV3Venue.USDC, null, BigInteger.valueOf(1000), BigInteger.valueOf(100),
                 List.of(UniswapV3Venue.USDC.contract(), UniswapV3Venue.WETH), 500);

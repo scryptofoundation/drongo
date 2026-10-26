@@ -18,6 +18,10 @@ public final class UniswapV3Venue implements SwapVenue {
     //SwapRouter02 reads recipient address(2) as "keep in the router", for a later unwrapWETH9 in the same multicall
     private static final EvmAddress ADDRESS_THIS = EvmAddress.fromString("0x0000000000000000000000000000000000000002");
     private static final int[] FEE_TIERS = {100, 500, 3000, 10000};
+    //TickMath bounds: with no price limit a swap that runs out of liquidity stops one step inside them, having used
+    //only part of its input. Such a quote is a partial fill and is refused.
+    private static final BigInteger MIN_SQRT_RATIO = new BigInteger("4295128739");
+    private static final BigInteger MAX_SQRT_RATIO = new BigInteger("1461446703485210103287273052203988822378723970342");
     private static final EvmAddress NONE = EvmAddress.fromBytes(new byte[20]);
 
     @Override
@@ -85,6 +89,11 @@ public final class UniswapV3Venue implements SwapVenue {
                 byte[] result = client.ethCall(QUOTER, Abi.encodeCall("quoteExactInputSingle((address,address,uint256,uint24,uint160))",
                         in, out, amountIn, BigInteger.valueOf(fee), BigInteger.ZERO));
                 BigInteger amountOut = Abi.decodeUint(result, 0);
+                BigInteger sqrtPriceAfter = Abi.decodeUint(result, 1);
+                if(sqrtPriceAfter.compareTo(MIN_SQRT_RATIO.add(BigInteger.ONE)) <= 0 || sqrtPriceAfter.compareTo(MAX_SQRT_RATIO.subtract(BigInteger.ONE)) >= 0) {
+                    errors.add(fee + ": not enough liquidity for the whole amount");
+                    continue;
+                }
                 if(amountOut.signum() > 0 && (best == null || amountOut.compareTo(best.amountOut()) > 0)) {
                     best = new Quote(tokenIn, tokenOut, amountIn, amountOut, List.of(in, out), fee);
                 }
@@ -109,6 +118,10 @@ public final class UniswapV3Venue implements SwapVenue {
                 quote.path().get(0), quote.path().get(1), fee, nativeOut ? ADDRESS_THIS : recipient, quote.amountIn(), minOut, BigInteger.ZERO));
         if(nativeOut) {
             calls.add(Abi.encodeCall("unwrapWETH9(uint256,address)", minOut, recipient));
+        }
+        if(nativeIn) {
+            //The router wraps only what the pool takes; anything left would sit in the router for anyone to sweep
+            calls.add(Abi.selector("refundETH()"));
         }
         byte[] data = Abi.encodeCall("multicall(uint256,bytes[])", BigInteger.valueOf(deadlineSeconds), new Abi.BytesArray(calls));
         return new Call(ROUTER, nativeIn ? quote.amountIn() : BigInteger.ZERO, data);

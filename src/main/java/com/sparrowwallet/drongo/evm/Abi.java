@@ -158,12 +158,12 @@ public final class Abi {
             return new String(result, 0, end, StandardCharsets.UTF_8);
         }
         BigInteger offset = decodeUint(result, 0);
-        if(offset.bitLength() > 31 || offset.intValue() + WORD > result.length) {
+        if(offset.bitLength() > 31 || (long)offset.intValue() + WORD > result.length) {
             throw new IllegalArgumentException("String offset out of range");
         }
         int start = offset.intValue();
         BigInteger length = new BigInteger(1, Arrays.copyOfRange(result, start, start + WORD));
-        if(length.bitLength() > 31 || length.intValue() > MAX_DYNAMIC_LENGTH || start + WORD + length.intValue() > result.length) {
+        if(length.bitLength() > 31 || length.intValue() > MAX_DYNAMIC_LENGTH || (long)start + WORD + length.intValue() > result.length) {
             throw new IllegalArgumentException("String length out of range");
         }
         return new String(result, start + WORD, length.intValue(), StandardCharsets.UTF_8);
@@ -173,7 +173,7 @@ public final class Abi {
     public static List<byte[]> decodeBytes32Array(byte[] result, int index) {
         int start = dynamicStart(result, index);
         BigInteger count = new BigInteger(1, Arrays.copyOfRange(result, start, start + WORD));
-        if(count.bitLength() > 31 || count.intValue() > MAX_ARRAY_LENGTH || start + WORD * (1L + count.intValue()) > result.length) {
+        if(count.bitLength() > 31 || count.intValue() > MAX_ARRAY_LENGTH || (long)start + WORD * (1L + count.intValue()) > result.length) {
             throw new IllegalArgumentException("Array length out of range");
         }
         List<byte[]> items = new ArrayList<>();
@@ -188,7 +188,7 @@ public final class Abi {
     public static byte[] decodeBytes(byte[] result, int index) {
         int start = dynamicStart(result, index);
         BigInteger length = new BigInteger(1, Arrays.copyOfRange(result, start, start + WORD));
-        if(length.bitLength() > 31 || length.intValue() > MAX_DYNAMIC_LENGTH || start + WORD + length.intValue() > result.length) {
+        if(length.bitLength() > 31 || length.intValue() > MAX_DYNAMIC_LENGTH || (long)start + WORD + length.intValue() > result.length) {
             throw new IllegalArgumentException("Bytes length out of range");
         }
         return Arrays.copyOfRange(result, start + WORD, start + WORD + length.intValue());
@@ -196,7 +196,7 @@ public final class Abi {
 
     private static int dynamicStart(byte[] result, int index) {
         BigInteger offset = decodeUint(result, index);
-        if(offset.bitLength() > 31 || offset.intValue() + WORD > result.length) {
+        if(offset.bitLength() > 31 || (long)offset.intValue() + WORD > result.length) {
             throw new IllegalArgumentException("Offset out of range");
         }
         return offset.intValue();

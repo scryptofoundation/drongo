@@ -163,7 +163,8 @@ public final class LitVmRpcClient {
         if(nonce == null) {
             nonce = getPendingNonce(from);
         }
-        BigInteger priority = getMaxPriorityFee();
+        //A tip above a few gwei is never needed on these chains; clamp what the node suggests rather than overpay
+        BigInteger priority = getMaxPriorityFee().min(MAX_PRIORITY_FEE);
         BigInteger maxFee = getBaseFee().multiply(BigInteger.TWO).add(priority);
         BigInteger gas = fixedGasLimit != null ? fixedGasLimit : estimateGas(from, to, value, data);
         //A margin on the estimate; unused gas is not charged.
@@ -327,7 +328,8 @@ public final class LitVmRpcClient {
     private static final BigInteger MAX_TRANSFER_GAS = BigInteger.valueOf(2_000_000);
     //A token metadata or balance result is a few words; anything far larger is not a real answer
     private static final int MAX_CALL_RESULT_HEX = 2 + 2 * 8192;
-    private static final BigInteger MAX_FEE_PER_GAS = BigInteger.valueOf(1_000L).multiply(BigInteger.TEN.pow(9)); //1000 gwei
+    private static final BigInteger MAX_PRIORITY_FEE = BigInteger.valueOf(3).multiply(BigInteger.TEN.pow(9)); //3 gwei
+    private static final BigInteger MAX_FEE_PER_GAS =BigInteger.valueOf(1_000L).multiply(BigInteger.TEN.pow(9)); //1000 gwei
     //A 256-bit quantity is at most 64 hex digits
     private static final int MAX_QUANTITY_HEX_DIGITS = 64;
 
