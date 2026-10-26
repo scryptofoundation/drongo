@@ -61,6 +61,11 @@ public final class Eip1559Transaction {
         return Keccak.keccak256(Rlp.concat(new byte[] {TYPE}, Rlp.encode(unsignedFields())));
     }
 
+    /** Length of the unsigned serialisation, which OP Stack chains price their L1 data fee on. */
+    public int unsignedSize() {
+        return 1 + Rlp.encode(unsignedFields()).length;
+    }
+
     /** The most this transaction can cost the sender: value plus gasLimit at the full maxFeePerGas. */
     public BigInteger maxCost() {
         return value.add(gasLimit.multiply(maxFeePerGas));

@@ -206,6 +206,39 @@ public final class LitVmRpcClient {
         return Optional.of(new Receipt(success, quantity(map.get("blockNumber")), quantity(map.get("gasUsed"))));
     }
 
+    /** eth_call from a given sender carrying a value: simulates a transaction without sending it. */
+    public byte[] simulate(EvmAddress from, EvmAddress to, BigInteger value, byte[] data) throws IOException {
+        Object result = call("eth_call", "[{\"from\":\"" + from + "\",\"to\":\"" + to + "\",\"value\":\"" + toQuantity(value)
+                + "\",\"data\":\"0x" + Utils.bytesToHex(data) + "\"},\"latest\"]");
+        if(!(result instanceof String hex) || !hex.startsWith("0x") || hex.length() % 2 != 0 || hex.length() > MAX_CALL_RESULT_HEX) {
+            throw new IOException("eth_call returned an invalid result");
+        }
+        return Utils.hexToBytes(hex.substring(2));
+    }
+
+    private static final EvmAddress GAS_PRICE_ORACLE = EvmAddress.fromString("0x420000000000000000000000000000000000000F");
+    //An L1 data fee is a small fraction of a cent on these testnets; a reading far above this is not a real answer
+    private static final BigInteger MAX_L1_DATA_FEE = BigInteger.TEN.pow(16);
+
+    /**
+     * The L1 data fee an OP Stack chain adds on top of gas, as an upper bound from its GasPriceOracle (Fjord and
+     * later); zero on other chains.
+     */
+    public BigInteger l1DataFee(Eip1559Transaction tx) throws IOException {
+        if(!network.isOpStack()) {
+            return BigInteger.ZERO;
+        }
+        try {
+            BigInteger fee = Abi.decodeUint(ethCall(GAS_PRICE_ORACLE, Abi.encodeCall("getL1FeeUpperBound(uint256)", BigInteger.valueOf(tx.unsignedSize()))), 0);
+            if(fee.compareTo(MAX_L1_DATA_FEE) > 0) {
+                throw new IOException("Implausible L1 data fee " + fee);
+            }
+            return fee;
+        } catch(IllegalArgumentException e) {
+            throw new IOException("Invalid L1 data fee response");
+        }
+    }
+
     public record Log(EvmAddress address, List<byte[]> topics, byte[] data) {}
 
     /** The event logs of a mined transaction; empty while it is pending. */

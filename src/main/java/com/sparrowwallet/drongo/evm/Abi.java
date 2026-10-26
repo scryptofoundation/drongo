@@ -41,6 +41,22 @@ public final class Abi {
             } else if(arg instanceof Dynamic dynamic) {
                 head.writeBytes(uint(BigInteger.valueOf(headSize + tail.size())));
                 writeDynamic(tail, dynamic.bytes());
+            } else if(arg instanceof AddressArray array) {
+                head.writeBytes(uint(BigInteger.valueOf(headSize + tail.size())));
+                tail.writeBytes(uint(BigInteger.valueOf(array.items().size())));
+                for(EvmAddress item : array.items()) {
+                    tail.writeBytes(encodeStatic(item));
+                }
+            } else if(arg instanceof BytesArray array) {
+                head.writeBytes(uint(BigInteger.valueOf(headSize + tail.size())));
+                tail.writeBytes(uint(BigInteger.valueOf(array.items().size())));
+                //Each element's offset counts from the start of the offsets, just after the length word
+                ByteArrayOutputStream elements = new ByteArrayOutputStream();
+                for(byte[] item : array.items()) {
+                    tail.writeBytes(uint(BigInteger.valueOf((long)WORD * array.items().size() + elements.size())));
+                    writeDynamic(elements, item);
+                }
+                tail.writeBytes(elements.toByteArray());
             } else if(arg instanceof Bytes32Array array) {
                 head.writeBytes(uint(BigInteger.valueOf(headSize + tail.size())));
                 tail.writeBytes(uint(BigInteger.valueOf(array.items().size())));
@@ -63,6 +79,12 @@ public final class Abi {
 
     /** Dynamic `bytes32[]` argument, such as an outbox Merkle proof. */
     public record Bytes32Array(List<byte[]> items) {}
+
+    /** Dynamic `address[]` argument, such as a Uniswap v2 swap path. */
+    public record AddressArray(List<EvmAddress> items) {}
+
+    /** Dynamic `bytes[]` argument, such as the calls of a multicall. */
+    public record BytesArray(List<byte[]> items) {}
 
     private static byte[] encodeStatic(Object arg) {
         if(arg instanceof EvmAddress address) {

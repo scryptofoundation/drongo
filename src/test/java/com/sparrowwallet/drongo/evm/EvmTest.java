@@ -136,7 +136,7 @@ public class EvmTest {
 
     @Test
     public void onlyTestnetsAreDefined() {
-        Assertions.assertEquals(2, LitVmNetwork.values().length);
+        Assertions.assertEquals(3, LitVmNetwork.values().length);
         Assertions.assertEquals(4441L, LitVmNetwork.LITEFORGE_TESTNET.getChainId());
         Assertions.assertEquals(11155111L, LitVmNetwork.SEPOLIA.getChainId());
         for(LitVmNetwork network : LitVmNetwork.values()) {
