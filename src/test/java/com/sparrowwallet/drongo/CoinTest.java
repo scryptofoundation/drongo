@@ -485,7 +485,13 @@ public class CoinTest {
         Assertions.assertArrayEquals(Network.canonicalValues(), Coin.LITECOIN.supportedCanonicalValues());
         Assertions.assertArrayEquals(new Network[]{Network.MAINNET, Network.TESTNET}, Coin.JUNKCOIN.supportedCanonicalValues());
         Assertions.assertArrayEquals(new Network[]{Network.MAINNET, Network.TESTNET}, Coin.PEPECOIN.supportedCanonicalValues());
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
+        Assertions.assertArrayEquals(new Network[]{Network.MAINNET, Network.TESTNET}, Coin.DOGECOIN.supportedCanonicalValues());
+        Coin.ChainParams dogeTestnet = Coin.DOGECOIN.params(Network.TESTNET);
+        Assertions.assertEquals(113, dogeTestnet.p2pkhAddressHeader());
+        Assertions.assertEquals(196, dogeTestnet.p2shAddressHeader());
+        Assertions.assertEquals(241, dogeTestnet.dumpedPrivateKeyHeader());
+        Assertions.assertEquals(44555, dogeTestnet.defaultPort());
+        for(Coin coin : new Coin[]{Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN}) {
             Assertions.assertArrayEquals(new Network[]{Network.MAINNET}, coin.supportedCanonicalValues(),
                     coin + " should expose only mainnet until other networks are verified");
         }

@@ -108,9 +108,10 @@ public enum Coin {
             //the Nintondo idquantum-dev params this mainnet uses, and has not produced a block since 2026-07.
             //Dingocoin's testnet is dead (seed gone, the one answering node is at height 0). Dogecoin's testnet
             //chain is alive (2026-10-23, ~68M) but no public Electrum or REST server serves it, so a wallet
-            //would have nothing to sync from; its params are known (113/196/241, tpub, RPC 44555) if one appears.
-            case JUNKCOIN, PEPECOIN -> network == Network.MAINNET || network == Network.TESTNET;
-            case DOGECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
+            //would have nothing to sync from by default. It is offered anyway (2026-10-26) for testing against your
+            //own node: Dogecoin Core with an Electrum server, set as the coin's server in test mode.
+            case JUNKCOIN, PEPECOIN, DOGECOIN -> network == Network.MAINNET || network == Network.TESTNET;
+            case LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET;
         };
     }
 
@@ -171,6 +172,10 @@ public enum Coin {
             case DOGECOIN -> switch(network) {
                 case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 22555);
+                //Testnet (dogecoin/dogecoin v1.14.9 chainparams.cpp CTestNetParams, chainparamsbase.cpp): P2PKH 113
+                //"n", P2SH 196 "2", WIF 241, standard tpub/tprv (0x043587cf/0x04358394), RPC 44555.
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 44555);
                 default -> throw unverified(network);
             };
             //Pepecoin: Dogecoin Core derivative, inherits dgub/dgpv unchanged. No segwit, no bech32.
