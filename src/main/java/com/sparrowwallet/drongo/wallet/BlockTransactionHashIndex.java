@@ -103,6 +103,7 @@ public class BlockTransactionHashIndex extends BlockTransactionHash implements C
     public BlockTransactionHashIndex copy() {
         BlockTransactionHashIndex copy = new BlockTransactionHashIndex(super.getHash(), super.getHeight(), super.getDate(), super.getFee(), index, value, spentBy == null ? null : spentBy.copy(), super.getLabel());
         copy.setId(getId());
+        copy.setStatus(status);
         return copy;
     }
 }
