@@ -113,6 +113,10 @@ public class PSBT {
     }
 
     public PSBT(WalletTransaction walletTransaction, Integer version, boolean includeGlobalXpubs) {
+        this(walletTransaction, version, includeGlobalXpubs, true);
+    }
+
+    public PSBT(WalletTransaction walletTransaction, Integer version, boolean includeGlobalXpubs, boolean shuffleOutputs) {
         Wallet wallet = walletTransaction.getWallet();
 
         //Default to PSBTv2
@@ -133,7 +137,7 @@ public class PSBT {
 
         //Shuffle outputs so change outputs are less obvious
         Random random = new Random();
-        for(int i = transaction.getOutputs().size() - 1; i > 0; i--) {
+        for(int i = shuffleOutputs ? transaction.getOutputs().size() - 1 : 0; i > 0; i--) {
             int j = random.nextInt(i + 1);
             transaction.swapOutputs(i, j);
             Collections.swap(walletTransactionOutputs, i, j);

@@ -24,6 +24,8 @@ public class WalletTransaction {
     private final long fee;
     private final Map<Sha256Hash, BlockTransaction> inputTransactions;
     private final List<Output> outputs;
+    //Transactions whose output positions carry meaning (inscription and rune sends) must not be shuffled into the PSBT
+    private boolean fixedOutputOrder;
 
     public WalletTransaction(Wallet wallet, Transaction transaction, List<UtxoSelector> utxoSelectors, List<Map<BlockTransactionHashIndex, WalletNode>> selectedUtxoSets, List<Payment> payments, List<Output> outputs, long fee) {
         this(wallet, transaction, utxoSelectors, selectedUtxoSets, payments, outputs, Collections.emptyMap(), fee);
@@ -54,7 +56,15 @@ public class WalletTransaction {
     }
 
     public PSBT createPSBT() {
-        return new PSBT(this);
+        return new PSBT(this, null, true, !fixedOutputOrder);
+    }
+
+    public boolean isFixedOutputOrder() {
+        return fixedOutputOrder;
+    }
+
+    public void setFixedOutputOrder(boolean fixedOutputOrder) {
+        this.fixedOutputOrder = fixedOutputOrder;
     }
 
     public Wallet getWallet() {
