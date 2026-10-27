@@ -30,9 +30,16 @@ public final class Abi {
      * Boolean, byte[] of exactly 32 (bytes32), String (dynamic string) and Dynamic (dynamic bytes).
      */
     public static byte[] encodeCall(String signature, Object... args) {
+        ByteArrayOutputStream call = new ByteArrayOutputStream();
+        call.writeBytes(selector(signature));
+        call.writeBytes(encodeArguments(args));
+        return call.toByteArray();
+    }
+
+    /** Arguments alone, as appended to creation code for a constructor; the types are those of {@link #encodeCall}. */
+    public static byte[] encodeArguments(Object... args) {
         ByteArrayOutputStream head = new ByteArrayOutputStream();
         ByteArrayOutputStream tail = new ByteArrayOutputStream();
-        head.writeBytes(selector(signature));
         int headSize = WORD * args.length;
         for(Object arg : args) {
             if(arg instanceof String text) {

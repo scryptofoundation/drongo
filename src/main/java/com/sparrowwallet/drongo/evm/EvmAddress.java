@@ -34,6 +34,12 @@ public final class EvmAddress {
         return new EvmAddress(Arrays.copyOfRange(hash, 12, 32));
     }
 
+    /** The address a contract created by sender with this nonce gets (CREATE): the last 20 bytes of keccak256(rlp([sender, nonce])). */
+    public static EvmAddress contractAddress(EvmAddress sender, java.math.BigInteger nonce) {
+        byte[] hash = Keccak.keccak256(Rlp.encode(java.util.List.of(sender.getBytes(), nonce)));
+        return new EvmAddress(Arrays.copyOfRange(hash, 12, 32));
+    }
+
     /**
      * Parses a 0x-prefixed (or bare) 40-hex-digit address. All-lowercase and all-uppercase addresses carry no
      * checksum and are accepted as-is; a mixed-case address must match its EIP-55 checksum exactly, because a

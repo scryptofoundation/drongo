@@ -20,6 +20,18 @@ public class BlockscoutClientTest {
         Assertions.assertEquals(BigInteger.valueOf(-3), failed.nativeChange(ME), "a failed transaction still pays its fee");
     }
 
+    @Test
+    public void verificationIsAMultipartFormWithTheInputAsAFile() {
+        java.util.Map<String, String> fields = new java.util.LinkedHashMap<>();
+        fields.put("compiler_version", "v0.8.36+commit.8a079791");
+        fields.put("contract_name", "Token.sol:Token");
+        String body = new String(BlockscoutClient.multipart("XYZ", fields, "files[0]", "input.json", "{\"language\":\"Solidity\"}"), java.nio.charset.StandardCharsets.UTF_8);
+        Assertions.assertTrue(body.startsWith("--XYZ\r\nContent-Disposition: form-data; name=\"compiler_version\"\r\n\r\nv0.8.36+commit.8a079791\r\n"));
+        Assertions.assertTrue(body.contains("name=\"contract_name\"\r\n\r\nToken.sol:Token\r\n"));
+        Assertions.assertTrue(body.contains("name=\"files[0]\"; filename=\"input.json\"\r\nContent-Type: application/json\r\n\r\n{\"language\":\"Solidity\"}\r\n"));
+        Assertions.assertTrue(body.endsWith("--XYZ--\r\n"));
+    }
+
     /** Read-only: the test account's LiteForge history; set LITVM_LIVE=1 to run. */
     @Test
     public void liveHistory() throws Exception {

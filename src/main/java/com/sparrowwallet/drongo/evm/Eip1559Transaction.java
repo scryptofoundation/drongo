@@ -25,10 +25,11 @@ public final class Eip1559Transaction {
     private final BigInteger value;
     private final byte[] data;
 
+    /** A null recipient creates a contract from the data as its creation code. */
     public Eip1559Transaction(long chainId, BigInteger nonce, BigInteger maxPriorityFeePerGas, BigInteger maxFeePerGas,
                               BigInteger gasLimit, EvmAddress to, BigInteger value, byte[] data) {
-        if(to == null) {
-            throw new IllegalArgumentException("A recipient is required (contract creation is not supported)");
+        if(to == null && (data == null || data.length == 0)) {
+            throw new IllegalArgumentException("A contract creation needs creation code");
         }
         if(maxPriorityFeePerGas.compareTo(maxFeePerGas) > 0) {
             throw new IllegalArgumentException("maxPriorityFeePerGas cannot exceed maxFeePerGas");
@@ -50,7 +51,7 @@ public final class Eip1559Transaction {
         fields.add(maxPriorityFeePerGas);
         fields.add(maxFeePerGas);
         fields.add(gasLimit);
-        fields.add(to.getBytes());
+        fields.add(to == null ? new byte[0] : to.getBytes());
         fields.add(value);
         fields.add(data);
         fields.add(List.of());
@@ -92,6 +93,9 @@ public final class Eip1559Transaction {
     public BigInteger getMaxFeePerGas() { return maxFeePerGas; }
     public BigInteger getGasLimit() { return gasLimit; }
     public EvmAddress getTo() { return to; }
+    public boolean isCreation() { return to == null; }
+    /** The address this transaction's contract gets once mined, or null when it is not a contract creation. */
+    public EvmAddress createdContract(EvmAddress sender) { return to == null ? EvmAddress.contractAddress(sender, nonce) : null; }
     public BigInteger getValue() { return value; }
     public byte[] getData() { return data == null ? null : data.clone(); }
 

@@ -163,6 +163,74 @@ public final class BlockscoutClient {
         }
     }
 
+    /**
+     * Submits a contract's source for verification as solc standard JSON input. The explorer recompiles it and, when
+     * the result matches the deployed code, shows the source as verified; that takes from seconds to minutes, so
+     * follow with {@link #isVerified(EvmAddress)}. Constructor arguments are read from the creation transaction.
+     */
+    public void verifyStandardInput(EvmAddress contract, String compilerVersion, String contractName, String standardJsonInput, String license) throws IOException {
+        String boundary = "sparrow" + Long.toHexString(new Random().nextLong());
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("compiler_version", compilerVersion);
+        fields.put("contract_name", contractName);
+        fields.put("license_type", license);
+        fields.put("autodetect_constructor_args", "true");
+        byte[] body = multipart(boundary, fields, "files[0]", "input.json", standardJsonInput);
+        HttpRequest request = HttpRequest.newBuilder(URI.create(network.getExplorerUrl() + "/api/v2/smart-contracts/" + contract + "/verification/via/standard-input"))
+                .timeout(Duration.ofSeconds(60)).header("Accept", "application/json").header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body)).build();
+        HttpResponse<String> response = send(request);
+        if(response.statusCode() / 100 != 2) {
+            String text = response.body().length() > 300 ? response.body().substring(0, 300) : response.body();
+            throw new IOException("Explorer refused verification (HTTP " + response.statusCode() + "): " + Erc20Token.sanitise(text, 300));
+        }
+    }
+
+    /**
+     * Whether the explorer shows source that exactly matches the contract. A partial match does not count: the
+     * explorer also attaches one on its own, from someone else's source with the same code, which is not ours.
+     */
+    public boolean isVerified(EvmAddress contract) throws IOException {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(network.getExplorerUrl() + "/api/v2/smart-contracts/" + contract)).timeout(Duration.ofSeconds(30))
+                .header("Accept", "application/json").GET().build();
+        HttpResponse<String> response = send(request);
+        if(response.statusCode() == 404) {
+            return false;
+        }
+        if(response.statusCode() / 100 != 2 || response.body().length() > MAX_RESPONSE_CHARS) {
+            throw new IOException("Explorer returned HTTP " + response.statusCode());
+        }
+        return verifiedExactly(MiniJson.parse(response.body()));
+    }
+
+    static boolean verifiedExactly(Object response) {
+        return response instanceof Map<?, ?> map && Boolean.TRUE.equals(map.get("is_verified")) && !Boolean.TRUE.equals(map.get("is_partially_verified"));
+    }
+
+    static byte[] multipart(String boundary, Map<String, String> fields, String fileField, String fileName, String fileContent) {
+        StringBuilder sb = new StringBuilder();
+        for(Map.Entry<String, String> field : fields.entrySet()) {
+            sb.append("--").append(boundary).append("\r\n")
+                    .append("Content-Disposition: form-data; name=\"").append(field.getKey()).append("\"\r\n\r\n")
+                    .append(field.getValue()).append("\r\n");
+        }
+        sb.append("--").append(boundary).append("\r\n")
+                .append("Content-Disposition: form-data; name=\"").append(fileField).append("\"; filename=\"").append(fileName).append("\"\r\n")
+                .append("Content-Type: application/json\r\n\r\n")
+                .append(fileContent).append("\r\n")
+                .append("--").append(boundary).append("--\r\n");
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private HttpResponse<String> send(HttpRequest request) throws IOException {
+        try {
+            return http.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch(InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted talking to the explorer", e);
+        }
+    }
+
     private Object get(String path) throws IOException {
         HttpRequest request = HttpRequest.newBuilder(URI.create(network.getExplorerUrl() + path)).timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/json").GET().build();

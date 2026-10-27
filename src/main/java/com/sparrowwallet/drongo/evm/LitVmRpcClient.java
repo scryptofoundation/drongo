@@ -86,8 +86,11 @@ public final class LitVmRpcClient {
     }
 
     public BigInteger estimateGas(EvmAddress from, EvmAddress to, BigInteger value, byte[] data) throws IOException {
-        StringBuilder tx = new StringBuilder("{\"from\":\"").append(from).append("\",\"to\":\"").append(to)
-                .append("\",\"value\":\"").append(toQuantity(value)).append("\"");
+        StringBuilder tx = new StringBuilder("{\"from\":\"").append(from).append("\"");
+        if(to != null) {
+            tx.append(",\"to\":\"").append(to).append("\"");
+        }
+        tx.append(",\"value\":\"").append(toQuantity(value)).append("\"");
         if(data != null && data.length > 0) {
             tx.append(",\"data\":\"0x").append(com.sparrowwallet.drongo.Utils.bytesToHex(data)).append("\"");
         }
@@ -114,10 +117,15 @@ public final class LitVmRpcClient {
         return com.sparrowwallet.drongo.Utils.hexToBytes(hex.substring(2));
     }
 
+    /** Whether the address holds contract code at the latest block. */
+    public boolean hasCode(EvmAddress address) throws IOException {
+        Object code = call("eth_getCode", "[\"" + address + "\",\"latest\"]");
+        return code instanceof String hex && hex.startsWith("0x") && hex.length() > 2;
+    }
+
     /** Reads an ERC-20 contract's metadata; fails if the address holds no contract or does not answer decimals(). */
     public Erc20Token readToken(EvmAddress contract) throws IOException {
-        Object code = call("eth_getCode", "[\"" + contract + "\",\"latest\"]");
-        if(!(code instanceof String hex) || hex.length() <= 2) {
+        if(!hasCode(contract)) {
             throw new IOException("No contract at " + contract);
         }
         try {
@@ -171,8 +179,14 @@ public final class LitVmRpcClient {
         BigInteger gasLimit = fixedGasLimit != null ? fixedGasLimit : gas.multiply(BigInteger.valueOf(12)).divide(BigInteger.TEN);
         //The fee inputs come from the node. Bound them so a faulty or hostile node cannot set an absurd fee for the
         //user to sign. Not 21000: on an Arbitrum Nitro chain like LitVM the estimate includes the L1 data cost.
-        if(gasLimit.compareTo(MAX_TRANSFER_GAS) > 0) {
-            throw new IOException("Node estimated " + gas + " gas, above the " + MAX_TRANSFER_GAS + " limit");
+        BigInteger maxGas = to == null ? MAX_CREATION_GAS : MAX_TRANSFER_GAS;
+        if(to == null && fixedGasLimit == null && gas.compareTo(maxGas) <= 0) {
+            //A creation close to the cap keeps what margin is left below it
+            gasLimit = gasLimit.min(maxGas);
+        }
+        if(gasLimit.compareTo(maxGas) > 0) {
+            throw new IOException(to == null ? "Deploying this needs " + gas + " gas on " + network.getDisplayName() + ", above the " + maxGas
+                    + " a transaction can use. Choose fewer features, or another network." : "Node estimated " + gas + " gas, above the " + maxGas + " limit");
         }
         if(maxFee.compareTo(MAX_FEE_PER_GAS) > 0 || priority.compareTo(maxFee) > 0) {
             throw new IOException("Node reported an implausible fee (max " + maxFee + " wei/gas, priority " + priority + ")");
@@ -209,9 +223,11 @@ public final class LitVmRpcClient {
 
     /** eth_call from a given sender carrying a value: simulates a transaction without sending it. */
     public byte[] simulate(EvmAddress from, EvmAddress to, BigInteger value, byte[] data) throws IOException {
-        Object result = call("eth_call", "[{\"from\":\"" + from + "\",\"to\":\"" + to + "\",\"value\":\"" + toQuantity(value)
+        //With no recipient this runs creation code, returning the code the contract would get
+        Object result = call("eth_call", "[{\"from\":\"" + from + "\"" + (to == null ? "" : ",\"to\":\"" + to + "\"") + ",\"value\":\"" + toQuantity(value)
                 + "\",\"data\":\"0x" + Utils.bytesToHex(data) + "\"},\"latest\"]");
-        if(!(result instanceof String hex) || !hex.startsWith("0x") || hex.length() % 2 != 0 || hex.length() > MAX_CALL_RESULT_HEX) {
+        int max = to == null ? MAX_CREATED_CODE_HEX : MAX_CALL_RESULT_HEX;
+        if(!(result instanceof String hex) || !hex.startsWith("0x") || hex.length() % 2 != 0 || hex.length() > max) {
             throw new IOException("eth_call returned an invalid result");
         }
         return Utils.hexToBytes(hex.substring(2));
@@ -326,6 +342,11 @@ public final class LitVmRpcClient {
     private static final int MAX_RESPONSE_CHARS = 1_000_000;
     //Upper bounds for a plain value transfer; LiteForge measured ~1.1 gwei base fee and well under 1M gas
     private static final BigInteger MAX_TRANSFER_GAS = BigInteger.valueOf(2_000_000);
+    //Ethereum's per-transaction gas cap (EIP-7825). The largest token template needs about 2.7M on LiteForge and Base
+    //Sepolia, but around 18M on Sepolia, whose repriced code deposit charges about 1,500 gas a byte
+    private static final BigInteger MAX_CREATION_GAS = BigInteger.valueOf(16_777_216);
+    //Simulated creation returns the new contract's code, at most the EIP-170 size
+    private static final int MAX_CREATED_CODE_HEX = 2 + 2 * 24576;
     //A token metadata or balance result is a few words; anything far larger is not a real answer
     private static final int MAX_CALL_RESULT_HEX = 2 + 2 * 8192;
     private static final BigInteger MAX_PRIORITY_FEE = BigInteger.valueOf(3).multiply(BigInteger.TEN.pow(9)); //3 gwei
