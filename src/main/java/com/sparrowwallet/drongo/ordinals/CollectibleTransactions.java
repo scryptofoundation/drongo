@@ -50,6 +50,23 @@ public final class CollectibleTransactions {
         return build(wallet, runeInputs, outputs, feeCandidates, feeRate, minRelayFeeRate);
     }
 
+    /**
+     * True when the transaction moves an inscription or runes: it carries a runestone or an envelope, or spends an output
+     * of the wallet marked PROTECTED. Such a transaction must not be fee-bumped by the ordinary RBF rebuild, which drops
+     * protected inputs, shuffles outputs and loses the runestone.
+     */
+    public static boolean movesCollectibles(Wallet wallet, Transaction transaction) {
+        if(OrdinalsScan.hasRunestone(transaction) || OrdinalsScan.hasEnvelope(transaction)) {
+            return true;
+        }
+        Set<String> spent = new HashSet<>();
+        for(TransactionInput input : transaction.getInputs()) {
+            spent.add(input.getOutpoint().getHash() + ":" + input.getOutpoint().getIndex());
+        }
+        return wallet.getWalletTxos().keySet().stream()
+                .anyMatch(txo -> txo.getStatus() == Status.PROTECTED && spent.contains(txo.getHash() + ":" + txo.getIndex()));
+    }
+
     private record Planned(TransactionOutput output, Address recipient, WalletNode node, Script script) {}
 
     private static void checkRecipient(Address recipient) {

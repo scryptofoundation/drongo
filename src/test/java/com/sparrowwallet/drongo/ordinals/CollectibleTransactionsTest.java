@@ -77,6 +77,24 @@ public class CollectibleTransactionsTest {
     }
 
     @Test
+    public void collectibleMovesAreRecognisedForFeeBumps() throws Exception {
+        List<CollectibleTransactions.Pinned> utxos = fund(10_000, 100_000, 100_000, 50_000);
+        utxos.get(0).utxo().setStatus(Status.PROTECTED);
+        Transaction inscriptionSend = CollectibleTransactions.sendInscription(wallet, utxos.get(0), recipient, utxos.subList(1, 2), 2.0, 1.0).getTransaction();
+        Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, inscriptionSend), "spends a protected output");
+
+        //A rune input not yet stamped is still caught by the runestone
+        Transaction runeSend = CollectibleTransactions.sendRunes(wallet, utxos.subList(3, 4), recipient, new RuneId(111, 1), BigInteger.TEN,
+                utxos.subList(2, 3), 2.0, 1.0).getTransaction();
+        Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, runeSend), "carries a runestone");
+
+        Transaction plain = new Transaction();
+        plain.addInput(utxos.get(2).utxo().getHash(), utxos.get(2).utxo().getIndex(), new Script(new byte[0]));
+        plain.addOutput(90_000, recipient);
+        Assertions.assertFalse(CollectibleTransactions.movesCollectibles(wallet, plain));
+    }
+
+    @Test
     public void feeComesFromCandidatesLargestFirstAndChangeIsLast() throws Exception {
         List<CollectibleTransactions.Pinned> utxos = fund(10_000, 50_000, 100_000);
         WalletTransaction wtx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), recipient, utxos.subList(1, 3), 2.0, 1.0);
