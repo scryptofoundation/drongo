@@ -6,8 +6,9 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 DRONGO=$(cd "$HERE/../.." && pwd)
 B=${EVM_BUILD:-$(cd "$DRONGO/../.." && pwd)/evm-build}
-SOLC=solc-linux-amd64-v0.8.36+commit.8a079791
-SOLC_SHA256=c8d35afdddc3cd2743ee88b8f25e0fecd16e2bdd5f2120f37e52cd9cc45ae0e6
+#0.8.33: the newest compiler the LiteForge explorer had verified contracts with (2026-10)
+SOLC=solc-linux-amd64-v0.8.33+commit.64118f21
+SOLC_SHA256=1274e5c4621ae478090c5a1f48466fd3c5f658ed9e14b15a0b213dc806215468
 OZ=contracts-5.6.1.tgz
 OZ_SHA512=Ly6SlsVJ3mj+b18W3R8gNufB7dTICT105fJhodGAGgyC2oqnBAhqSiNDJ8V8DLY05cCz81GLI0CU5vNYA1EC/w==
 

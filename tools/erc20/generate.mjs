@@ -14,7 +14,7 @@ if(!solc || !ozDir || !outFile) {
     process.exit(2);
 }
 
-const COMPILER = 'v0.8.36+commit.8a079791';
+const COMPILER = 'v0.8.33+commit.64118f21';
 const OZ_VERSION = '5.6.1';
 const OZ_PREFIX = '@openzeppelin/contracts/';
 const SETTINGS = { optimizer: { enabled: true, runs: 200 }, evmVersion: 'cancun' };

@@ -99,7 +99,7 @@ public class Erc20DeployLiveTest {
 
     private static void verify(BlockscoutClient explorer, Erc20Templates templates, Erc20Templates.Options options, EvmAddress contract, LitVmNetwork network) throws Exception {
         if(SourcifyClient.supports(network)) {
-            //Sourcify proves the source exactly; the Blockscout explorers' own verifier was failing every submission in October 2026
+            //Sourcify proves the source exactly; in October 2026 the Blockscout explorers could not reach their verifier service
             SourcifyClient sourcify = new SourcifyClient(network);
             SourcifyClient.Status status = SourcifyClient.Status.PENDING;
             for(int attempt = 0; attempt < 6 && status != SourcifyClient.Status.EXACT; attempt++) {
@@ -120,7 +120,8 @@ public class Erc20DeployLiveTest {
         }
         //The explorer indexes the new contract a little after it is mined
         IOException last = null;
-        for(int i = 0; i < 24; i++) {
+        //LiteForge's explorer has taken 15 minutes to index a new contract
+        for(int i = 0; i < 150; i++) {
             try {
                 explorer.verifyStandardInput(contract, templates.compilerVersion(), templates.qualifiedContractName(), templates.verificationInput(options), "mit");
                 last = null;
@@ -137,7 +138,11 @@ public class Erc20DeployLiveTest {
         boolean verified = false;
         for(int i = 0; i < 60 && !verified; i++) {
             Thread.sleep(5000);
-            verified = explorer.isVerified(contract);
+            try {
+                verified = explorer.isVerified(contract);
+            } catch(IOException e) {
+                //the explorer answers 500 for a while after indexing a new contract
+            }
         }
         Assertions.assertTrue(verified, "explorer did not verify " + network.explorerAddressUrl(contract));
         System.out.println("verified " + network.explorerAddressUrl(contract));

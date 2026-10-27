@@ -54,7 +54,7 @@ public class Erc20TemplatesTest {
                 Assertions.assertTrue(templates.keys().contains(o.key()), o.key());
             }
         }
-        Assertions.assertEquals("v0.8.36+commit.8a079791", templates.compilerVersion());
+        Assertions.assertEquals("v0.8.33+commit.64118f21", templates.compilerVersion());
     }
 
     @Test
