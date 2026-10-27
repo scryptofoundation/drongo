@@ -110,6 +110,9 @@ public final class MoveIn {
             Found input = inputs.get(i);
             PSBTInput psbtInput = psbt.getPsbtInputs().get(i);
             ECKey pubKey = input.key().publicKey();
+            if(input.type() == ScriptType.P2SH_P2WPKH) {
+                psbtInput.setRedeemScript(ScriptType.P2WPKH.getOutputScript(pubKey));
+            }
             if(!psbtInput.sign(input.type().getOutputKey(input.key().signingKey()))) {
                 throw new IllegalStateException("Could not sign the input spending " + input.output().getHash() + ":" + input.output().getIndex());
             }
