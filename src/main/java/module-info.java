@@ -24,5 +24,6 @@ open module com.sparrowwallet.drongo {
     exports com.sparrowwallet.drongo.wallet.slip39;
     exports com.sparrowwallet.drongo.silentpayments;
     exports com.sparrowwallet.drongo.evm;
+    exports com.sparrowwallet.drongo.ordinals;
     exports org.bitcoin;
 }
