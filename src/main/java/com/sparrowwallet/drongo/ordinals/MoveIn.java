@@ -29,6 +29,14 @@ public final class MoveIn {
         }
     }
 
+    /**
+     * True when the output comes from a coinbase or an MWEB peg-out (HogEx) transaction. Both need confirmations before
+     * they can be spent, which the address lookup does not report, so a move-in leaves them out rather than risk a rejected broadcast.
+     */
+    public static boolean mayBeImmature(TransactionOutput output) {
+        return output.getParent() instanceof Transaction parent && (parent.isCoinBase() || parent.isHogEx());
+    }
+
     public static Transaction sweep(List<Found> found, List<Address> inscriptionDestinations, Address runesDestination, Address plainDestination,
                                     double feeRate, double minRelayFeeRate) {
         List<Found> inscribed = found.stream().filter(Found::inscribed).toList();

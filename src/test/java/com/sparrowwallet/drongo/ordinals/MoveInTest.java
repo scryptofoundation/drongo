@@ -81,6 +81,22 @@ public class MoveInTest {
     }
 
     @Test
+    public void coinbaseAndPegoutOutputsMayBeImmature() {
+        Transaction coinbase = new Transaction();
+        coinbase.addInput(Sha256Hash.ZERO_HASH, 0xFFFFFFFFL, new Script(new byte[] {1, 2}));
+        coinbase.addOutput(50_000, plainDestination);
+        Assertions.assertTrue(MoveIn.mayBeImmature(coinbase.getOutputs().getFirst()));
+
+        Transaction hogex = new Transaction();
+        hogex.addInput(Sha256Hash.wrap("11".repeat(32)), 0, new Script(new byte[0]));
+        hogex.addOutput(1_000_000, ScriptType.MWEB_HOGEX.getOutputScript(new byte[32]));
+        hogex.addOutput(50_000, plainDestination);
+        Assertions.assertTrue(MoveIn.mayBeImmature(hogex.getOutputs().get(1)));
+
+        Assertions.assertFalse(MoveIn.mayBeImmature(found(20, new long[] {10_000}, List.of(List.of()), new boolean[] {false}).getFirst().output()));
+    }
+
+    @Test
     public void runesGoToPointerOutput() {
         List<MoveIn.Found> found = found(9, new long[] {10_000, 10_000, 1_000_000},
                 List.of(List.of("cc".repeat(32) + "i0"), List.of(), List.of()), new boolean[] {false, true, false});

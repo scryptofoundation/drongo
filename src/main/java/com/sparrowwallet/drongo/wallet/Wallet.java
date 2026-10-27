@@ -276,15 +276,21 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         childWallet.birthDate = null;
         childWallet.setScriptType(ScriptType.P2TR);
 
-        List<ChildNumber> taprootDerivation = ScriptType.P2TR.getDefaultDerivation();
-        for(Keystore keystore : childWallet.getKeystores()) {
-            try {
-                Keystore derivedKeystore = keystore.hasSeed() ? Keystore.fromSeed(keystore.getSeed(), taprootDerivation) : Keystore.fromMasterPrivateExtendedKey(keystore.getMasterPrivateExtendedKey(), taprootDerivation);
-                keystore.setKeyDerivation(derivedKeystore.getKeyDerivation());
-                keystore.setExtendedPublicKey(derivedKeystore.getExtendedPublicKey());
-            } catch(Exception e) {
-                throw new IllegalStateException("Cannot derive keystore for the taproot account", e);
+        //Derive on this wallet's coin (its BIP44 coin type), not whichever coin's tab has focus
+        com.sparrowwallet.drongo.Coin previousCoin = com.sparrowwallet.drongo.Coin.beginScope(getCoin());
+        try {
+            List<ChildNumber> taprootDerivation = ScriptType.P2TR.getDefaultDerivation();
+            for(Keystore keystore : childWallet.getKeystores()) {
+                try {
+                    Keystore derivedKeystore = keystore.hasSeed() ? Keystore.fromSeed(keystore.getSeed(), taprootDerivation) : Keystore.fromMasterPrivateExtendedKey(keystore.getMasterPrivateExtendedKey(), taprootDerivation);
+                    keystore.setKeyDerivation(derivedKeystore.getKeyDerivation());
+                    keystore.setExtendedPublicKey(derivedKeystore.getExtendedPublicKey());
+                } catch(Exception e) {
+                    throw new IllegalStateException("Cannot derive keystore for the taproot account", e);
+                }
             }
+        } finally {
+            com.sparrowwallet.drongo.Coin.endScope(previousCoin);
         }
         childWallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE, ScriptType.P2TR, childWallet.getKeystores(), 1));
 

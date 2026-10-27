@@ -52,6 +52,20 @@ public class TaprootChildWalletTest {
     }
 
     @Test
+    public void taprootChildUsesTheMastersCoinWhateverIsFocused() throws Exception {
+        Wallet master = seedWallet(ScriptType.P2WPKH);
+        master.setCoin(Coin.LITECOIN);
+        Coin focused = Coin.beginScope(Coin.DOGECOIN);
+        try {
+            Wallet child = master.addTaprootChildWallet();
+            Assertions.assertEquals("m/86'/2'/0'", child.getKeystores().getFirst().getKeyDerivation().getDerivationPath());
+            Assertions.assertEquals(Coin.LITECOIN, child.getCoin());
+        } finally {
+            Coin.endScope(focused);
+        }
+    }
+
+    @Test
     public void refusesWatchOnlyAndMwebAndDuplicates() throws Exception {
         Wallet master = seedWallet(ScriptType.P2WPKH);
         master.addTaprootChildWallet();
