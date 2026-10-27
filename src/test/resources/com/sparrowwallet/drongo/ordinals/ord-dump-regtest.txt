@@ -1,0 +1,15 @@
+# Throwaway keys from the private Litecoin regtest in testnet-infra (ord-litecoin's wallet); never used on any real network.
+# Wallet dump created by Litecoin v0.21.5.8
+# * Created on 2026-10-27T16:50:45Z
+# * Best block at time of backup was 118 (50e007fb316d923e5437939ffdfa6e96264a7dc02cc5ea921a2349ba4697b19a),
+#   mined on 2026-10-27T02:11:58Z
+
+cRkwdfpiNxDEMdpURJ9iwDeKrvULDLNFj5VGh4CcuYcuAgjmRC2s 2026-10-27T01:44:34Z reserve=1 # addr=rltc1qqrx906hfl99uhfes09nxpdle48ylymlcl39wz5 hdkeypath=m/0'/0'/171'
+cQgF4y4J3YFvS35b97PgidAqBpydKbyo94dK9fvhsptuX1g6dywu 2026-10-27T01:44:34Z reserve=1 # addr=rltc1qq8uu29tzlc480rua750dg706xz2z7jc9mquzqg hdkeypath=m/0'/0'/124'
+cShiVkvzMajq2Jkacdgmefp7BWUGb5RtLzkRne8gG9cCe5N1gkfc 2026-10-27T01:44:34Z hdseed=1 # addr=rltc1qe84sp0nqyuc77097cav2rl52lhj4q0varzqvzv
+cSK53t3gxmrg8kKiqfT2FdzPvgdrfHRtdbdQgRqhpiqyxvFiSvEt 2026-10-27T01:44:34Z label= # addr=rltc1qluy08d3peapsd8rujc6s7g7lfswhaz950p3ead hdkeypath=m/0'/0'/0'
+cVo4eGdSwsS3sZBSfXpewhkX5kfC1QzEgybEau5w9r26NZQFGvNi 2026-10-27T01:44:36Z change=1 # addr=rltc1qqyxr7w2wc6uux3p5wy3z9777kxfnq5vdmel824 hdkeypath=m/0'/1'/3'
+cVx3r7iq1iGtDMcDvHnzn9zDVUe1qCVicwohWWHG1C6sPsVqXEqi 2026-10-27T01:44:36Z change=1 # addr=rltc1qqyw5mvacvfhg0ww6q3cmvpu2ndn3fqp7vlutjn hdkeypath=m/0'/1'/7'
+cQ9QeHv2foeqa3CTUuHz6tpnPQ4hEtc7PfpLxkmbradfJs8Q5vdK 2026-10-27T01:44:36Z change=1 # addr=rltc1qzmzcz6qrslpyv2krdrfhw4wun0apl4l2jvhgnr hdkeypath=m/0'/1'/13'
+
+# End of dump
