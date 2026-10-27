@@ -244,6 +244,61 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     }
 
     /**
+     * Adds a same-seed taproot (P2TR, BIP86 account 0) child wallet. Inscriptions and runes are received and minted
+     * there, so a seed's NFTs gather in one place whichever Litecoin wallet of the seed the user works from.
+     */
+    public Wallet addTaprootChildWallet() {
+        if(!isMasterWallet()) {
+            throw new IllegalStateException("Cannot add child wallet to existing child wallet");
+        }
+        if(policyType != PolicyType.SINGLE || scriptType == ScriptType.P2TR || scriptType == ScriptType.MWEB) {
+            throw new IllegalStateException("A taproot child wallet needs a single-signature, non-taproot, non-MWEB wallet");
+        }
+        if(getKeystores().stream().anyMatch(keystore -> !keystore.hasMasterPrivateKey())) {
+            throw new IllegalStateException("A taproot child wallet is derived from the seed, which a watch-only wallet does not have");
+        }
+        if(containsMasterPrivateKeys() && isEncrypted()) {
+            throw new IllegalStateException("Cannot derive child wallet xpub from encrypted wallet");
+        }
+        if(getTaprootChildWallet() != null) {
+            throw new IllegalStateException("Taproot child wallet already exists");
+        }
+
+        Wallet childWallet = this.copy();
+        childWallet.setId(null);
+        childWallet.setName("Taproot");
+        childWallet.setLabel(null);
+        childWallet.purposeNodes.clear();
+        childWallet.transactions.clear();
+        childWallet.detachedLabels.clear();
+        childWallet.childWallets.clear();
+        childWallet.storedBlockHeight = null;
+        childWallet.birthDate = null;
+        childWallet.setScriptType(ScriptType.P2TR);
+
+        List<ChildNumber> taprootDerivation = ScriptType.P2TR.getDefaultDerivation();
+        for(Keystore keystore : childWallet.getKeystores()) {
+            try {
+                Keystore derivedKeystore = keystore.hasSeed() ? Keystore.fromSeed(keystore.getSeed(), taprootDerivation) : Keystore.fromMasterPrivateExtendedKey(keystore.getMasterPrivateExtendedKey(), taprootDerivation);
+                keystore.setKeyDerivation(derivedKeystore.getKeyDerivation());
+                keystore.setExtendedPublicKey(derivedKeystore.getExtendedPublicKey());
+            } catch(Exception e) {
+                throw new IllegalStateException("Cannot derive keystore for the taproot account", e);
+            }
+        }
+        childWallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE, ScriptType.P2TR, childWallet.getKeystores(), 1));
+
+        childWallet.setMasterWallet(this);
+        getChildWallets().add(childWallet);
+        return childWallet;
+    }
+
+    /** The same-seed taproot child wallet, or null. */
+    public Wallet getTaprootChildWallet() {
+        return getChildWallet(ScriptType.P2TR);
+    }
+
+    /**
      * Returns the same-seed MWEB child wallet attached to this master wallet, or null if none exists.
      */
     public Wallet getMwebChildWallet() {
