@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.crypto;
 
+import com.sparrowwallet.drongo.KeyDerivation;
 import com.sparrowwallet.drongo.Utils;
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.policy.PolicyType;
@@ -15,15 +16,19 @@ import java.util.*;
 import static com.sparrowwallet.drongo.protocol.ScriptType.P2TR;
 
 public class Bip322 {
+    public static final String SIMPLE_PREFIX = "smp";
+    public static final String FULL_PREFIX = "ful";
+    public static final String FULL_POF_PREFIX = "pof";
+
     public static String signMessageBip322(ScriptType scriptType, String message, ECKey privKey) {
         checkScriptType(scriptType);
 
         ECKey pubKey = ECKey.fromPublicOnly(privKey);
-        Address address = scriptType.getAddress(pubKey);
+        Address address = scriptType.getAddress(PolicyType.SINGLE_HD, pubKey);
 
         PSBT psbt = getBip322Psbt(scriptType, address, message);
         PSBTInput psbtInput = psbt.getPsbtInputs().getFirst();
-        psbtInput.sign(scriptType.getOutputKey(privKey));
+        psbtInput.sign(scriptType.getOutputKey(PolicyType.SINGLE_HD, privKey));
 
         return getBip322SignatureFromPsbt(scriptType, psbt, pubKey);
     }
@@ -36,11 +41,52 @@ public class Bip322 {
         TransactionOutput utxoOutput = toSpend.getOutputs().getFirst();
 
         PSBT psbt = new PSBT(toSign);
+        psbt.setGenericSignedMessage(message);
         PSBTInput psbtInput = psbt.getPsbtInputs().getFirst();
         psbtInput.setWitnessUtxo(utxoOutput);
         psbtInput.setSigHash(SigHash.ALL);
 
         return psbt;
+    }
+
+    public static PSBT getBip322PsbtSp(Address address, String message, byte[] silentPaymentsTweak, Map<ECKey, KeyDerivation> spendDerivations) {
+        if(silentPaymentsTweak == null) {
+            throw new IllegalArgumentException("Silent payments tweak is required");
+        }
+
+        PSBT psbt = getBip322Psbt(P2TR, address, message);
+        PSBTInput psbtInput = psbt.getPsbtInputs().getFirst();
+        psbtInput.setSilentPaymentsTweak(silentPaymentsTweak);
+        if(spendDerivations != null && !spendDerivations.isEmpty()) {
+            psbtInput.getSilentPaymentsSpendDerivations().putAll(spendDerivations);
+        }
+
+        return psbt;
+    }
+
+    public static String signMessageBip322Sp(Address address, String message, ECKey spendPrivKey, byte[] silentPaymentsTweak) {
+        PSBT psbt = getBip322PsbtSp(address, message, silentPaymentsTweak, Collections.emptyMap());
+        PSBTInput psbtInput = psbt.getPsbtInputs().getFirst();
+
+        if(!psbtInput.signSilentPayments(spendPrivKey)) {
+            throw new IllegalStateException("Failed to sign BIP322 PSBT with silent payments tweak");
+        }
+
+        return getBip322SignatureFromPsbtSp(psbt);
+    }
+
+    public static String getBip322SignatureFromPsbtSp(PSBT signedPsbt) {
+        PSBTInput psbtInput = signedPsbt.getPsbtInputs().getFirst();
+        TransactionSignature signature = psbtInput.getTapKeyPathSignature();
+        if(signature == null) {
+            throw new IllegalArgumentException("PSBT does not contain a taproot keypath signature");
+        }
+
+        Transaction finalizeTransaction = new Transaction();
+        TransactionWitness witness = new TransactionWitness(finalizeTransaction, signature);
+        finalizeTransaction.addInput(Sha256Hash.ZERO_HASH, 0, new Script(new byte[0]), witness);
+
+        return SIMPLE_PREFIX + Base64.getEncoder().encodeToString(witness.toByteArray());
     }
 
     public static String getBip322SignatureFromPsbt(ScriptType scriptType, PSBT signedPsbt, ECKey pubKey) {
@@ -55,23 +101,32 @@ public class Bip322 {
 
         TransactionOutput utxoOutput = psbtInput.getWitnessUtxo();
         Transaction finalizeTransaction = new Transaction();
-        Script scriptSig = scriptType.getScriptSig(utxoOutput.getScript(), pubKey, signature);
+        Script scriptSig = scriptType.getScriptSig(PolicyType.SINGLE_HD, utxoOutput.getScript(), pubKey, signature);
         TransactionWitness witness = psbtInput.isTaproot() ? new TransactionWitness(finalizeTransaction, signature) : new TransactionWitness(finalizeTransaction, pubKey, signature);
         TransactionInput finalizedTxInput = finalizeTransaction.addInput(Sha256Hash.ZERO_HASH, 0, scriptSig, witness);
 
-        return Base64.getEncoder().encodeToString(finalizedTxInput.getWitness().toByteArray());
+        return SIMPLE_PREFIX + Base64.getEncoder().encodeToString(finalizedTxInput.getWitness().toByteArray());
     }
 
     public static boolean verifyMessageBip322(ScriptType scriptType, Address address, String message, String signatureBase64) throws SignatureException {
         checkScriptType(scriptType);
 
-        if(signatureBase64.trim().isEmpty()) {
+        String trimmed = signatureBase64.trim();
+        if(trimmed.isEmpty()) {
             throw new SignatureException("Provided signature is empty.");
+        }
+
+        if(trimmed.startsWith(FULL_PREFIX) || trimmed.startsWith(FULL_POF_PREFIX)) {
+            throw new SignatureException("Only the simple BIP322 signature variant is supported.");
+        }
+
+        if(trimmed.startsWith(SIMPLE_PREFIX)) {
+            trimmed = trimmed.substring(SIMPLE_PREFIX.length());
         }
 
         byte[] signatureEncoded;
         try {
-            signatureEncoded = Base64.getDecoder().decode(signatureBase64);
+            signatureEncoded = Base64.getDecoder().decode(trimmed);
         } catch(IllegalArgumentException e) {
             throw new SignatureException("Could not decode base64 signature", e);
         }
@@ -101,7 +156,7 @@ public class Bip322 {
             }
             pubKey = ECKey.fromPublicOnly(witness.getPushes().get(1));
 
-            if(!address.equals(scriptType.getAddress(pubKey))) {
+            if(!address.equals(scriptType.getAddress(PolicyType.SINGLE_HD, pubKey))) {
                 throw new SignatureException("Provided address does not match pubkey in signature");
             }
         } else if(scriptType == ScriptType.P2TR) {
@@ -135,7 +190,7 @@ public class Bip322 {
     }
 
     private static void checkScriptType(ScriptType scriptType) {
-        if(!scriptType.isAllowed(PolicyType.SINGLE)) {
+        if(!scriptType.isAllowed(PolicyType.SINGLE_HD)) {
             throw new UnsupportedOperationException("Only singlesig addresses are currently supported");
         }
 
