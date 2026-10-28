@@ -115,6 +115,13 @@ public class CollectibleTransactionsTest {
         //A mint's commit looks plain, but a fee bump would orphan its reveal
         wallet.getPendingMints().add(new PendingMint(PendingMint.Kind.INSCRIPTION, "m/0/1", new byte[32], plain.getTxId(), 0, 10_330, "text/plain", null));
         Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, plain), "a pending mint's commit");
+
+        //The record may live in the seed's taproot wallet file rather than the funding wallet's
+        wallet.getPendingMints().clear();
+        Wallet taprootFile = new Wallet("taproot file");
+        taprootFile.getPendingMints().add(new PendingMint(PendingMint.Kind.INSCRIPTION, "m/0/1", new byte[32], plain.getTxId(), 0, 10_330, "text/plain", null));
+        Assertions.assertFalse(CollectibleTransactions.movesCollectibles(wallet, plain, List.of()));
+        Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, plain, List.of(taprootFile)), "a commit recorded in another wallet file");
     }
 
     @Test

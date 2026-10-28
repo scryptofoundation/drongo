@@ -47,7 +47,8 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     private final Map<Address, SilentPaymentAddress> silentPaymentAddresses = new HashMap<>();
     private MixConfig mixConfig;
     private LitVmLink litVmLink;
-    private final List<PendingMint> pendingMints = new ArrayList<>();
+    //Changed on the UI thread, written by the wallet file's update thread
+    private final List<PendingMint> pendingMints = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Map<Sha256Hash, UtxoMixData> utxoMixes = new HashMap<>();
     private Integer storedBlockHeight;
     private Integer gapLimit;

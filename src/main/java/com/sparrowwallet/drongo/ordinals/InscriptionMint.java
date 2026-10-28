@@ -16,7 +16,8 @@ import java.util.List;
  * Mints an inscription the way ord does, in two transactions. The commit pays a taproot output whose only script leaf
  * is the inscription's envelope; the reveal spends it by that script, putting the envelope on chain, and pays POSTAGE
  * to the destination (the inscription sits at its first sat). An etch is the same with the rune's commitment in the
- * envelope and the etching runestone as the reveal's second output; ord only accepts it once the commit is
+ * envelope and the etching runestone as the reveal's last output, after a second POSTAGE output holding the premine
+ * (as ord does, so the premine can be sent without the inscription); ord only accepts it once the commit is
  * COMMIT_CONFIRMATIONS deep, so the reveal's sequence makes it unminable before then.
  *
  * The commit is an ordinary fixed-order transaction of the funding wallet. The reveal is built and signed here with
@@ -24,14 +25,16 @@ import java.util.List;
  */
 public final class InscriptionMint {
     public static final int COMMIT_CONFIRMATIONS = 6;
+    //Litecoin Core relays an OP_RETURN output of at most this many bytes (ord refuses larger runestones too)
+    public static final int MAX_RUNESTONE_BYTES = 83;
 
     private InscriptionMint() {}
 
     /**
      * @param revealKey the taproot wallet's key in the envelope script and the commit's internal key (public part)
-     * @param etchRunestone the etching runestone (pointer 0), or null for a plain inscription
+     * @param etching the rune etched by the reveal, or null for a plain inscription
      */
-    public record Plan(Inscription inscription, ECKey revealKey, Address destination, Script etchRunestone, double revealFeeRate) {
+    public record Plan(Inscription inscription, ECKey revealKey, Address destination, Runestone.Etching etching, double revealFeeRate) {
         public Plan {
             if(destination == null) {
                 throw new IllegalArgumentException("A destination is required");
@@ -39,10 +42,14 @@ public final class InscriptionMint {
             if(destination.getScriptType() == ScriptType.MWEB) {
                 throw new IllegalArgumentException("Inscriptions cannot be minted to an MWEB address: ord does not follow coins into MWEB");
             }
-            if(etchRunestone != null && inscription.runeCommitment() == null) {
+            if(etching != null && inscription.runeCommitment() == null) {
                 throw new IllegalArgumentException("An etch needs the rune's commitment in its envelope");
             }
-            int weight = inscription.revealWeight(revealOutputs(destination, etchRunestone));
+            if(etching != null && InscriptionMint.etchRunestone(etching).getProgram().length > MAX_RUNESTONE_BYTES) {
+                throw new IllegalArgumentException("This etching's runestone is " + InscriptionMint.etchRunestone(etching).getProgram().length + " bytes, and Litecoin nodes relay at most "
+                        + MAX_RUNESTONE_BYTES + ". Use a shorter name, fewer spacers or fewer mint terms.");
+            }
+            int weight = inscription.revealWeight(revealOutputs(destination, etching));
             if(weight > Inscription.MAX_REVEAL_WEIGHT) {
                 throw new IllegalArgumentException(String.format("The content is too large to inscribe: at most %,d bytes of %s fit in one transaction",
                         Inscription.maxBodyBytes(inscription.contentType()), inscription.contentType()));
@@ -63,24 +70,42 @@ public final class InscriptionMint {
         }
 
         public long revealFee() {
-            int weight = inscription.revealWeight(revealOutputs(destination, etchRunestone));
+            int weight = inscription.revealWeight(revealOutputs(destination, etching));
             return (long)Math.ceil(Math.ceil(weight / 4.0) * revealFeeRate);
         }
 
+        /** Postage for each output the reveal pays, plus the reveal fee. */
         public long commitValue() {
-            return CollectibleTransactions.POSTAGE + revealFee();
+            return CollectibleTransactions.POSTAGE * (premineOutput(etching) ? 2 : 1) + revealFee();
+        }
+
+        /** The etching runestone, pointing the premine at its own output; null for a plain inscription. */
+        public Script etchRunestone() {
+            return etching == null ? null : InscriptionMint.etchRunestone(etching);
         }
 
         boolean etch() {
-            return etchRunestone != null;
+            return etching != null;
         }
     }
 
-    private static List<Script> revealOutputs(Address destination, Script etchRunestone) {
+    private static boolean premineOutput(Runestone.Etching etching) {
+        return etching != null && etching.premine() != null && etching.premine().signum() > 0;
+    }
+
+    private static Script etchRunestone(Runestone.Etching etching) {
+        return Runestone.script(List.of(), premineOutput(etching) ? 1 : null, etching, null);
+    }
+
+    //[inscription, premine if any, runestone if etching]
+    private static List<Script> revealOutputs(Address destination, Runestone.Etching etching) {
         List<Script> outputs = new ArrayList<>();
         outputs.add(destination.getOutputScript());
-        if(etchRunestone != null) {
-            outputs.add(etchRunestone);
+        if(premineOutput(etching)) {
+            outputs.add(destination.getOutputScript());
+        }
+        if(etching != null) {
+            outputs.add(etchRunestone(etching));
         }
         return outputs;
     }
@@ -98,8 +123,8 @@ public final class InscriptionMint {
     }
 
     /**
-     * The signed reveal spending the commit output by the envelope script: outputs [destination POSTAGE, etching
-     * runestone if etching], witness [signature, script, control block].
+     * The signed reveal spending the commit output by the envelope script: outputs [destination POSTAGE, destination
+     * POSTAGE for a premine, etching runestone if etching], witness [signature, script, control block].
      */
     public static Transaction reveal(Plan plan, TransactionOutput commitOutput, ECKey revealPrivateKey) {
         if(!commitOutput.getScript().equals(plan.commitAddress().getOutputScript())) {
@@ -120,6 +145,9 @@ public final class InscriptionMint {
         input.setSequenceNumber(plan.etch() ? COMMIT_CONFIRMATIONS - 1 : TransactionInput.SEQUENCE_RBF_ENABLED);
         //The commit output may hold more than planned (an earlier fee estimate); the destination still gets only postage
         reveal.addOutput(CollectibleTransactions.POSTAGE, plan.destination().getOutputScript());
+        if(premineOutput(plan.etching())) {
+            reveal.addOutput(CollectibleTransactions.POSTAGE, plan.destination().getOutputScript());
+        }
         if(plan.etch()) {
             reveal.addOutput(0, plan.etchRunestone());
         }

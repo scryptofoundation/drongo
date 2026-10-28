@@ -88,4 +88,13 @@ public class InscriptionTest {
         Assertions.assertNull(text.runeCommitment());
         Assertions.assertThrows(IllegalArgumentException.class, () -> Inscription.text(""));
     }
+
+    @Test
+    public void contentTypeFitsTheWalletFileAndOnePush() {
+        //Stored in a varchar(255) column and pushed as one script element, so longer types are refused before any commit
+        Assertions.assertDoesNotThrow(() -> new Inscription("a".repeat(Inscription.MAX_CONTENT_TYPE_BYTES), new byte[] {1}, null));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new Inscription("a".repeat(Inscription.MAX_CONTENT_TYPE_BYTES + 1), new byte[] {1}, null));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new Inscription("é".repeat(128), new byte[] {1}, null));
+        Assertions.assertEquals(255, Inscription.MAX_CONTENT_TYPE_BYTES);
+    }
 }

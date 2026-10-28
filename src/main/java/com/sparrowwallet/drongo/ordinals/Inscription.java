@@ -20,6 +20,8 @@ import java.util.Map;
 public record Inscription(String contentType, byte[] body, byte[] runeCommitment) {
     /** Litecoin Core's standard transaction weight; a heavier reveal is not relayed. */
     public static final int MAX_REVEAL_WEIGHT = 400_000;
+    //The wallet file keeps a pending mint's content type in a varchar(255); well under the 520 byte push limit
+    public static final int MAX_CONTENT_TYPE_BYTES = 255;
     public static final String TEXT = "text/plain;charset=utf-8";
     private static final byte[] PROTOCOL = "ord".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] TAG_CONTENT_TYPE = {1};
@@ -32,6 +34,9 @@ public record Inscription(String contentType, byte[] body, byte[] runeCommitment
     public Inscription {
         if(contentType == null || contentType.isEmpty()) {
             throw new IllegalArgumentException("An inscription needs a content type");
+        }
+        if(contentType.getBytes(StandardCharsets.UTF_8).length > MAX_CONTENT_TYPE_BYTES) {
+            throw new IllegalArgumentException("The content type is longer than " + MAX_CONTENT_TYPE_BYTES + " bytes");
         }
         if(body == null || body.length == 0) {
             throw new IllegalArgumentException("An inscription cannot be empty");

@@ -70,12 +70,16 @@ public final class CollectibleTransactions {
      * protected inputs, shuffles outputs and loses the runestone.
      */
     public static boolean movesCollectibles(Wallet wallet, Transaction transaction) {
+        return movesCollectibles(wallet, transaction, List.of(wallet.isMasterWallet() ? wallet : wallet.getMasterWallet()));
+    }
+
+    /** As above, with the pending mints looked up in the given wallets (the seed's taproot wallet may be another file). */
+    public static boolean movesCollectibles(Wallet wallet, Transaction transaction, Collection<Wallet> pendingHolders) {
         if(OrdinalsScan.hasRunestone(transaction) || OrdinalsScan.hasEnvelope(transaction)) {
             return true;
         }
-        Wallet master = wallet.isMasterWallet() ? wallet : wallet.getMasterWallet();
         Sha256Hash txid = transaction.getTxId();
-        if(master.getPendingMints().stream().anyMatch(mint -> mint.getCommitTxid().equals(txid))) {
+        if(pendingHolders.stream().anyMatch(holder -> holder.getPendingMints().stream().anyMatch(mint -> mint.getCommitTxid().equals(txid)))) {
             return true;
         }
         Set<String> spent = new HashSet<>();

@@ -146,24 +146,59 @@ public class InscriptionMintTest {
     public void etchRevealCarriesCommitmentAndRunestone() throws Exception {
         RuneName name = RuneName.parse("SPARROW•SCRYPT•TEST");
         Runestone.Etching etching = new Runestone.Etching(name, 2, (int)'S', BigInteger.valueOf(500_000), null, false);
-        Script runestone = Runestone.script(List.of(), 0, etching, null);
+        //Like ord, the premine gets its own output after the inscription's, so it can be sent without the inscription
+        Script runestone = Runestone.script(List.of(), 1, etching, null);
         Inscription inscription = new Inscription(Inscription.TEXT, "etched".getBytes(), name.commitment());
-        InscriptionMint.Plan plan = new InscriptionMint.Plan(inscription, ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, runestone, 2.0);
+        InscriptionMint.Plan plan = new InscriptionMint.Plan(inscription, ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, etching, 2.0);
+        Assertions.assertEquals(runestone, plan.etchRunestone());
+        Assertions.assertEquals(2 * CollectibleTransactions.POSTAGE + plan.revealFee(), plan.commitValue());
         Transaction commit = InscriptionMint.commit(wallet, plan, fund(100_000), 2.0, 1.0).getTransaction();
         Transaction reveal = InscriptionMint.reveal(plan, commit.getOutputs().get(0), REVEAL_PRIVATE);
 
         Assertions.assertEquals(InscriptionMint.COMMIT_CONFIRMATIONS - 1, reveal.getInputs().getFirst().getSequenceNumber());
-        Assertions.assertEquals(2, reveal.getOutputs().size());
+        Assertions.assertEquals(3, reveal.getOutputs().size());
         Assertions.assertEquals(destination.getOutputScript(), reveal.getOutputs().get(0).getScript());
-        Assertions.assertEquals(runestone, reveal.getOutputs().get(1).getScript());
-        Assertions.assertEquals(0, reveal.getOutputs().get(1).getValue());
+        Assertions.assertEquals(CollectibleTransactions.POSTAGE, reveal.getOutputs().get(0).getValue());
+        Assertions.assertEquals(destination.getOutputScript(), reveal.getOutputs().get(1).getScript());
+        Assertions.assertEquals(CollectibleTransactions.POSTAGE, reveal.getOutputs().get(1).getValue());
+        Assertions.assertEquals(runestone, reveal.getOutputs().get(2).getScript());
+        Assertions.assertEquals(0, reveal.getOutputs().get(2).getValue());
         String script = Utils.bytesToHex(plan.revealScript().getProgram());
         Assertions.assertTrue(script.contains("010d" + String.format("%02x", name.commitment().length) + Utils.bytesToHex(name.commitment())));
-        Assertions.assertEquals((long)Math.ceil(Math.ceil(reveal.getWeightUnits() / 4.0) * 2.0), commit.getOutputs().get(0).getValue() - CollectibleTransactions.POSTAGE);
+        Assertions.assertEquals((long)Math.ceil(Math.ceil(reveal.getWeightUnits() / 4.0) * 2.0), commit.getOutputs().get(0).getValue() - 2 * CollectibleTransactions.POSTAGE);
 
         Inscription noCommitment = Inscription.text("etched");
         Assertions.assertThrows(IllegalArgumentException.class,
-                () -> new InscriptionMint.Plan(noCommitment, ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, runestone, 2.0));
+                () -> new InscriptionMint.Plan(noCommitment, ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, etching, 2.0));
+    }
+
+    @Test
+    public void etchWithoutPremineHasNoPremineOutput() throws Exception {
+        RuneName name = RuneName.parse("SPARROW•SCRYPT•OPEN");
+        Runestone.Terms terms = new Runestone.Terms(BigInteger.valueOf(100), BigInteger.TEN, null, null, null, null);
+        Runestone.Etching etching = new Runestone.Etching(name, 0, null, BigInteger.ZERO, terms, false);
+        Inscription inscription = new Inscription(Inscription.TEXT, "open".getBytes(), name.commitment());
+        InscriptionMint.Plan plan = new InscriptionMint.Plan(inscription, ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, etching, 2.0);
+        Assertions.assertEquals(Runestone.script(List.of(), null, etching, null), plan.etchRunestone());
+        Assertions.assertEquals(CollectibleTransactions.POSTAGE + plan.revealFee(), plan.commitValue());
+        Transaction commit = InscriptionMint.commit(wallet, plan, fund(100_000), 2.0, 1.0).getTransaction();
+        Transaction reveal = InscriptionMint.reveal(plan, commit.getOutputs().get(0), REVEAL_PRIVATE);
+        Assertions.assertEquals(2, reveal.getOutputs().size());
+        Assertions.assertEquals(plan.etchRunestone(), reveal.getOutputs().get(1).getScript());
+    }
+
+    @Test
+    public void oversizeRunestoneRefused() {
+        //Litecoin Core relays OP_RETURN outputs of at most 83 bytes: a larger etching runestone would strand the commit
+        RuneName name = RuneName.parse("Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z");
+        BigInteger big = BigInteger.TWO.pow(100);
+        Runestone.Terms terms = new Runestone.Terms(big, BigInteger.TWO.pow(20), 1L << 40, 1L << 41, 1L << 40, 1L << 41);
+        Runestone.Etching etching = new Runestone.Etching(name, 38, 0x10FFFF, big, terms, true);
+        Assertions.assertTrue(Runestone.script(List.of(), 1, etching, null).getProgram().length > InscriptionMint.MAX_RUNESTONE_BYTES);
+        Inscription inscription = new Inscription(Inscription.TEXT, "big".getBytes(), name.commitment());
+        IllegalArgumentException e = Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new InscriptionMint.Plan(inscription, ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, etching, 2.0));
+        Assertions.assertTrue(e.getMessage().contains("83"), e.getMessage());
     }
 
     @Test
