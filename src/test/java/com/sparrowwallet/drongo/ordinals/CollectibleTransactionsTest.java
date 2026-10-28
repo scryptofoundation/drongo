@@ -92,6 +92,10 @@ public class CollectibleTransactionsTest {
         plain.addInput(utxos.get(2).utxo().getHash(), utxos.get(2).utxo().getIndex(), new Script(new byte[0]));
         plain.addOutput(90_000, recipient);
         Assertions.assertFalse(CollectibleTransactions.movesCollectibles(wallet, plain));
+
+        //A mint's commit looks plain, but a fee bump would orphan its reveal
+        wallet.getPendingMints().add(new PendingMint(PendingMint.Kind.INSCRIPTION, "m/0/1", new byte[32], plain.getTxId(), 0, 10_330, "text/plain", null));
+        Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, plain), "a pending mint's commit");
     }
 
     @Test

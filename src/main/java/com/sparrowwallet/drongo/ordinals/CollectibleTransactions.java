@@ -51,12 +51,17 @@ public final class CollectibleTransactions {
     }
 
     /**
-     * True when the transaction moves an inscription or runes: it carries a runestone or an envelope, or spends an output
-     * of the wallet marked PROTECTED. Such a transaction must not be fee-bumped by the ordinary RBF rebuild, which drops
+     * True when the transaction moves an inscription or runes: it carries a runestone or an envelope, is the commit of a
+     * pending mint (kept on the master wallet), or spends an output of the wallet marked PROTECTED. Such a transaction must not be fee-bumped by the ordinary RBF rebuild, which drops
      * protected inputs, shuffles outputs and loses the runestone.
      */
     public static boolean movesCollectibles(Wallet wallet, Transaction transaction) {
         if(OrdinalsScan.hasRunestone(transaction) || OrdinalsScan.hasEnvelope(transaction)) {
+            return true;
+        }
+        Wallet master = wallet.isMasterWallet() ? wallet : wallet.getMasterWallet();
+        Sha256Hash txid = transaction.getTxId();
+        if(master.getPendingMints().stream().anyMatch(mint -> mint.getCommitTxid().equals(txid))) {
             return true;
         }
         Set<String> spent = new HashSet<>();

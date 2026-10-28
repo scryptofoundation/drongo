@@ -47,6 +47,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     private final Map<Address, SilentPaymentAddress> silentPaymentAddresses = new HashMap<>();
     private MixConfig mixConfig;
     private LitVmLink litVmLink;
+    private final List<PendingMint> pendingMints = new ArrayList<>();
     private final Map<Sha256Hash, UtxoMixData> utxoMixes = new HashMap<>();
     private Integer storedBlockHeight;
     private Integer gapLimit;
@@ -646,6 +647,11 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
 
     public void setLitVmLink(LitVmLink litVmLink) {
         this.litVmLink = litVmLink;
+    }
+
+    /** Mints whose reveal is not yet broadcast, kept on the master wallet of the seed. */
+    public List<PendingMint> getPendingMints() {
+        return pendingMints;
     }
 
     public Map<TableType, WalletTable> getWalletTables() {
@@ -2385,6 +2391,9 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         copy.setWalletConfig(walletConfig == null ? null : walletConfig.copy());
         copy.setMixConfig(mixConfig == null ? null : mixConfig.copy());
         copy.setLitVmLink(litVmLink == null ? null : litVmLink.copy());
+        for(PendingMint pendingMint : pendingMints) {
+            copy.getPendingMints().add(pendingMint.copy());
+        }
         copy.setStoredBlockHeight(getStoredBlockHeight());
         copy.gapLimit = gapLimit;
         copy.watchLast = watchLast;
