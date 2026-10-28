@@ -69,7 +69,7 @@ public class TapScriptTest {
         ECKey key = ECKey.fromPrivate(Utils.hexToBytes("0101010101010101010101010101010101010101010101010101010101010101"));
         Script script = new Script(Utils.concat(Utils.concat(new byte[] {0x20}, key.getPubKeyXCoord()), new byte[] {(byte)ScriptOpCodes.OP_CHECKSIG}));
         ECKey outputKey = TapScript.outputKey(key, TapScript.leafHash(script));
-        TransactionOutput spent = new TransactionOutput(null, 20_000, ScriptType.P2TR.getOutputScript(outputKey));
+        TransactionOutput spent = new TransactionOutput(null, 20_000, ScriptType.P2TR.getOutputScript(outputKey.getPubKeyXCoord()));
 
         Transaction spend = new Transaction();
         spend.setVersion(2);

@@ -67,7 +67,7 @@ public final class CollectibleTransactions {
                 .anyMatch(txo -> txo.getStatus() == Status.PROTECTED && spent.contains(txo.getHash() + ":" + txo.getIndex()));
     }
 
-    private record Planned(TransactionOutput output, Address recipient, WalletNode node, Script script) {}
+    record Planned(TransactionOutput output, Address recipient, WalletNode node, Script script) {}
 
     private static void checkRecipient(Address recipient) {
         if(recipient == null) {
@@ -78,7 +78,7 @@ public final class CollectibleTransactions {
         }
     }
 
-    private static WalletTransaction build(Wallet wallet, List<Pinned> fixedInputs, List<Planned> planned, List<Pinned> feeCandidates,
+    static WalletTransaction build(Wallet wallet, List<Pinned> fixedInputs, List<Planned> planned, List<Pinned> feeCandidates,
                                            double feeRate, double minRelayFeeRate) throws InsufficientFundsException {
         List<Pinned> candidates = new ArrayList<>(feeCandidates);
         candidates.removeIf(candidate -> fixedInputs.stream().anyMatch(fixed -> fixed.utxo().equals(candidate.utxo())));
