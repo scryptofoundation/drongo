@@ -118,12 +118,37 @@ public class Erc20DeployLiveTest {
             System.out.println("verified on Sourcify " + sourcify.repositoryUrl(contract));
             return;
         }
+        verifyOnExplorer(explorer, templates.compilerVersion(), templates, options, contract, network);
+    }
+
+    /**
+     * Has the network's Blockscout explorer verify a token deployed earlier (ERC20_VERIFY, its address), from the
+     * template it was built with (ERC20_KEY). ERC20_SOLC gives the compiler for a token built before the templates
+     * moved to their current solc; read it from the end of the contract's code.
+     */
+    @Test
+    public void explorerVerifiesExistingToken() throws Exception {
+        String address = System.getenv("ERC20_VERIFY");
+        Assumptions.assumeTrue(address != null && !address.isEmpty(), "set ERC20_VERIFY to verify a deployed token");
+        LitVmNetwork network = LitVmNetwork.valueOf(Objects.requireNonNullElse(System.getenv("ERC20_NETWORK"), "LITEFORGE_TESTNET"));
+        Erc20Templates templates = Erc20Templates.get();
+        Erc20Templates.Options options = Erc20Templates.Options.fromKey(Objects.requireNonNullElse(System.getenv("ERC20_KEY"), "capped_bpevfc"));
+        String compiler = Objects.requireNonNullElse(System.getenv("ERC20_SOLC"), templates.compilerVersion());
+        verifyOnExplorer(new BlockscoutClient(network), compiler, templates, options, EvmAddress.fromString(address), network);
+    }
+
+    private static void verifyOnExplorer(BlockscoutClient explorer, String compiler, Erc20Templates templates, Erc20Templates.Options options,
+                                         EvmAddress contract, LitVmNetwork network) throws Exception {
+        if(explorer.isVerified(contract)) {
+            System.out.println("already verified " + network.explorerAddressUrl(contract));
+            return;
+        }
         //The explorer indexes the new contract a little after it is mined
         IOException last = null;
         //LiteForge's explorer has taken 15 minutes to index a new contract
         for(int i = 0; i < 150; i++) {
             try {
-                explorer.verifyStandardInput(contract, templates.compilerVersion(), templates.qualifiedContractName(), templates.verificationInput(options), "mit");
+                explorer.verifyStandardInput(contract, compiler, templates.qualifiedContractName(), templates.verificationInput(options), "mit");
                 last = null;
                 break;
             } catch(IOException e) {
