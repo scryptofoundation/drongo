@@ -51,6 +51,20 @@ public final class CollectibleTransactions {
     }
 
     /**
+     * Mints one batch of a rune's open terms: outputs [destination POSTAGE, runestone (mint, pointer 0), LTC change], so
+     * the minted amount lands on the destination.
+     */
+    public static WalletTransaction mintRune(Wallet wallet, RuneId id, Address destination, List<Pinned> feeCandidates,
+                                             double feeRate, double minRelayFeeRate) throws InsufficientFundsException {
+        checkRecipient(destination);
+        Script runestone = Runestone.script(List.of(), RECIPIENT_OUTPUT, null, id);
+        List<Planned> outputs = List.of(
+                new Planned(new TransactionOutput(null, POSTAGE, destination.getOutputScript()), destination, null, null),
+                new Planned(new TransactionOutput(null, 0, runestone), null, null, runestone));
+        return build(wallet, List.of(), outputs, feeCandidates, feeRate, minRelayFeeRate);
+    }
+
+    /**
      * True when the transaction moves an inscription or runes: it carries a runestone or an envelope, is the commit of a
      * pending mint (kept on the master wallet), or spends an output of the wallet marked PROTECTED. Such a transaction must not be fee-bumped by the ordinary RBF rebuild, which drops
      * protected inputs, shuffles outputs and loses the runestone.

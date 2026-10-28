@@ -2,6 +2,7 @@ package com.sparrowwallet.drongo.ordinals;
 
 import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.KeyPurpose;
+import com.sparrowwallet.drongo.Utils;
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.address.MwebAddress;
 import com.sparrowwallet.drongo.crypto.ECKey;
@@ -74,6 +75,24 @@ public class CollectibleTransactionsTest {
         Assertions.assertEquals(0, tx.getInputs().get(0).getOutpoint().getIndex());
         Assertions.assertEquals(10_000, tx.getOutputs().get(0).getValue());
         Assertions.assertEquals(recipient.getOutputScript(), tx.getOutputs().get(0).getScript());
+    }
+
+    @Test
+    public void mintRuneOutputs() throws Exception {
+        List<CollectibleTransactions.Pinned> utxos = fund(100_000);
+        WalletTransaction wtx = CollectibleTransactions.mintRune(wallet, new RuneId(111, 1), recipient, utxos, 2.0, 1.0);
+        Transaction tx = wtx.getTransaction();
+        Assertions.assertTrue(wtx.isFixedOutputOrder());
+        Assertions.assertEquals(3, tx.getOutputs().size());
+        Assertions.assertEquals(recipient.getOutputScript(), tx.getOutputs().get(0).getScript());
+        Assertions.assertEquals(CollectibleTransactions.POSTAGE, tx.getOutputs().get(0).getValue());
+        //Mint 111:1, pointer 0: the minted runes go to the recipient
+        Assertions.assertEquals("6a5d06146f14011600", Utils.bytesToHex(tx.getOutputs().get(1).getScript().getProgram()));
+        Assertions.assertEquals(0, tx.getOutputs().get(1).getValue());
+        Assertions.assertTrue(wtx.getOutputs().get(2) instanceof WalletTransaction.ChangeOutput);
+
+        Address mweb = new MwebAddress(new byte[66]);
+        Assertions.assertThrows(IllegalArgumentException.class, () -> CollectibleTransactions.mintRune(wallet, new RuneId(111, 1), mweb, utxos, 2.0, 1.0));
     }
 
     @Test
