@@ -20,7 +20,7 @@ public class InscriptionTest {
     static Properties fixture() throws IOException {
         Properties properties = new Properties();
         try(InputStream in = InscriptionTest.class.getResourceAsStream("/com/sparrowwallet/drongo/protocol/ord-reveal-regtest.properties")) {
-            properties.load(in);
+            properties.load(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
         }
         return properties;
     }

@@ -6,9 +6,11 @@ import com.sparrowwallet.drongo.protocol.ScriptChunk;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 public class RunestoneTest {
     @Test
@@ -59,6 +61,41 @@ public class RunestoneTest {
             total += chunk.getData().length;
         }
         Assertions.assertEquals(Runestone.payload(edicts, 1).length, total);
+    }
+
+    @Test
+    public void etchingMatchesOrdRegtest() throws IOException {
+        Properties f = InscriptionTest.fixture();
+        Runestone.Etching etching = new Runestone.Etching(RuneName.parse(f.getProperty("etch.rune")), 2, (int)'T', BigInteger.valueOf(100_000), null, false);
+        Assertions.assertEquals(f.getProperty("etch.runestone"), Utils.bytesToHex(Runestone.script(List.of(), 1, etching, null).getProgram()));
+    }
+
+    @Test
+    public void etchingWithTermsFieldOrder() {
+        Runestone.Terms terms = new Runestone.Terms(BigInteger.valueOf(100), BigInteger.TEN, 200L, null, null, 50L);
+        Runestone.Etching etching = new Runestone.Etching(RuneName.parse("A"), 0, null, BigInteger.ZERO, terms, true);
+        //Flags 7 (etching, terms, turbo), rune 0, amount 100, cap 10, height start 200, offset end 50
+        Assertions.assertEquals("6a5d0d" + "0207" + "0400" + "0a64" + "080a" + "0cc801" + "1232",
+                Utils.bytesToHex(Runestone.script(List.of(), null, etching, null).getProgram()));
+    }
+
+    @Test
+    public void etchingSupplyMustFit() {
+        Runestone.Terms terms = new Runestone.Terms(BigInteger.TWO.pow(100), BigInteger.TWO.pow(30), null, null, null, null);
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new Runestone.Etching(RuneName.parse("A"), 0, null, BigInteger.ONE, terms, false));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new Runestone.Etching(RuneName.parse("A"), 39, null, BigInteger.ONE, null, false));
+    }
+
+    @Test
+    public void mintField() {
+        //Mint is written as two tag 20 pairs (block, then tx), before the pointer
+        Assertions.assertEquals("6a5d06146f14011600", Utils.bytesToHex(Runestone.script(List.of(), 0, null, new RuneId(111, 1)).getProgram()));
+    }
+
+    @Test
+    public void twoArgumentFormUnchanged() {
+        List<Runestone.Edict> edicts = List.of(new Runestone.Edict(RuneId.parse("111:1"), BigInteger.valueOf(500), 0));
+        Assertions.assertArrayEquals(Runestone.script(edicts, 1).getProgram(), Runestone.script(edicts, 1, null, null).getProgram());
     }
 
     @Test

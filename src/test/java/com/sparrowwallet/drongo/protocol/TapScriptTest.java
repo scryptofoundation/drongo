@@ -15,7 +15,7 @@ public class TapScriptTest {
     static Properties fixture() throws IOException {
         Properties properties = new Properties();
         try(InputStream in = TapScriptTest.class.getResourceAsStream("ord-reveal-regtest.properties")) {
-            properties.load(in);
+            properties.load(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
         }
         return properties;
     }
