@@ -136,14 +136,17 @@ public class Transaction extends ChildMessage {
 
     public Sha256Hash calculateTxId(boolean useWitnesses) {
         for(TransactionInput in : inputs) {
-            if((int)in.getOutpoint().getIndex() == -1) {
+            //An MWEB transaction carries its id on a sentinel input with a -1 index and a non-zero hash. Coinbase and BIP322 to_spend inputs
+            //also use the 0xFFFFFFFF index but carry a zero hash, and must have their id computed
+            if((int)in.getOutpoint().getIndex() == -1 && !in.getOutpoint().getHash().equals(Sha256Hash.ZERO_HASH)) {
                 return in.getOutpoint().getHash();
             }
         }
 
         ByteArrayOutputStream stream = new UnsafeByteArrayOutputStream(length < 32 ? 32 : length + 32);
         try {
-            bitcoinSerializeToStream(stream, useWitnesses, false, false);
+            //The full input list, as getInputs() leaves out the 0xFFFFFFFF index inputs a coinbase or BIP322 to_spend transaction must hash
+            bitcoinSerializeToStream(stream, useWitnesses, false, true);
         } catch(IOException e) {
             throw new RuntimeException(e); // cannot happen
         }
