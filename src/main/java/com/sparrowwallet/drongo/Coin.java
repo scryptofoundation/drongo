@@ -406,6 +406,16 @@ public enum Coin {
     }
 
     /**
+     * The fee rate in sat/vB to start from before a server has reported estimates: Sparrow's generic fallback
+     * (20 on mainnet, 1 on test networks), raised to {@link #getRecommendedFeeRate()} so the first transaction on a
+     * chain with a higher floor is not refused or left unmined.
+     */
+    public double getFallbackFeeRate(Network network) {
+        double generic = network == Network.MAINNET ? 20d : 1d;
+        return Math.max(generic, getRecommendedFeeRate());
+    }
+
+    /**
      * The value in satoshis below which an output should not be created, or 0 where the chain uses
      * Bitcoin's fee-rate-derived dust rule instead of a flat limit.
      *

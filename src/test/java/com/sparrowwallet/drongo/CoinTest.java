@@ -44,6 +44,26 @@ public class CoinTest {
      * SegwitHeight 144000. bel1 P2WPKH outputs are in live use. Taproot is a separate BIP9 deployment (bit 2,
      * min_activation_height 188000) whose activation is not verified, so P2TR stays off.
      */
+    /**
+     * Before a server reports fee estimates the send form starts from the fallback rate. It must never start below the
+     * chain's recommended rate, or the first transaction on DINGO, LKY and the like is refused or never mined.
+     */
+    @Test
+    public void fallbackFeeRateNeverStartsBelowTheChainsRecommendedRate() {
+        Assertions.assertEquals(20d, Coin.LITECOIN.getFallbackFeeRate(Network.MAINNET));
+        Assertions.assertEquals(1d, Coin.LITECOIN.getFallbackFeeRate(Network.TESTNET));
+        Assertions.assertEquals(1000d, Coin.DOGECOIN.getFallbackFeeRate(Network.MAINNET));
+        Assertions.assertEquals(1000d, Coin.LUCKYCOIN.getFallbackFeeRate(Network.TESTNET));
+        Assertions.assertEquals(100000d, Coin.DINGOCOIN.getFallbackFeeRate(Network.TESTNET));
+        Assertions.assertEquals(20d, Coin.BELLSCOIN.getFallbackFeeRate(Network.MAINNET));
+        Assertions.assertEquals(10d, Coin.BELLSCOIN.getFallbackFeeRate(Network.TESTNET));
+        for(Coin coin : Coin.values()) {
+            for(Network network : new Network[]{Network.MAINNET, Network.TESTNET}) {
+                Assertions.assertTrue(coin.getFallbackFeeRate(network) >= coin.getRecommendedFeeRate(), coin + " on " + network);
+            }
+        }
+    }
+
     @Test
     public void bellscoinMainnetHasSegwitButNotTaproot() throws InvalidAddressException {
         Assertions.assertEquals("bel", Coin.BELLSCOIN.params(Network.MAINNET).bech32AddressHrp());
