@@ -64,6 +64,19 @@ public class CoinTest {
         }
     }
 
+    /**
+     * Dingocoin Core's CFeeRate::GetFee rounds the size up to whole kilobytes, so a 367 byte transaction at its
+     * 1 DINGO/kB floor needs a full 1 DINGO. A fee for the bare size is refused as "insufficient priority".
+     */
+    @Test
+    public void dingocoinChargesFeesPerWholeKilobyte() {
+        Assertions.assertEquals(1000d, Coin.DINGOCOIN.getFeeSize(367d));
+        Assertions.assertEquals(1000d, Coin.DINGOCOIN.getFeeSize(1000d));
+        Assertions.assertEquals(2000d, Coin.DINGOCOIN.getFeeSize(1000.25d));
+        Assertions.assertEquals(367d, Coin.LITECOIN.getFeeSize(367d));
+        Assertions.assertEquals(367d, Coin.BELLSCOIN.getFeeSize(367d));
+    }
+
     @Test
     public void bellscoinMainnetHasSegwitButNotTaproot() throws InvalidAddressException {
         Assertions.assertEquals("bel", Coin.BELLSCOIN.params(Network.MAINNET).bech32AddressHrp());

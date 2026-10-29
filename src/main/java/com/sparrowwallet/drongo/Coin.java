@@ -416,6 +416,18 @@ public enum Coin {
     }
 
     /**
+     * The size a fee rate is charged on. Dingocoin Core's CFeeRate::GetFee rounds the size up to whole kilobytes
+     * (amount.cpp, "Round up to the nearest 1000 bytes"), so its relay floor is per started kilobyte.
+     */
+    public double getFeeSize(double virtualSize) {
+        if(this == DINGOCOIN) {
+            return Math.ceil(virtualSize / 1000d) * 1000d;
+        }
+
+        return virtualSize;
+    }
+
+    /**
      * The value in satoshis below which an output should not be created, or 0 where the chain uses
      * Bitcoin's fee-rate-derived dust rule instead of a flat limit.
      *

@@ -1371,7 +1371,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             }
 
             double noChangeVSize = transaction.getVirtualSize();
-            long noChangeFeeRequiredAmt = params.getRequiredFeeAmount(noChangeVSize);
+            long noChangeFeeRequiredAmt = params.getRequiredFeeAmount(getCoin().getFeeSize(noChangeVSize));
 
             //Add 1 satoshi to accommodate longer signatures when feeRate equals the current or common min relay fee to ensure fee is sufficient for maximum "relayability"
             if(params.isMinRelayRate()) {
@@ -1421,7 +1421,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
                 }
                 TransactionOutput changeOutput = new TransactionOutput(transaction, setChangeAmts.getFirst(), changeNode.getOutputScript());
                 double changeVSize = noChangeVSize + changeOutput.getLength() * numSets;
-                long changeFeeRequiredAmt = params.getRequiredFeeAmount(changeVSize);
+                long changeFeeRequiredAmt = params.getRequiredFeeAmount(getCoin().getFeeSize(changeVSize));
                 if(params.isMinRelayRate()) {
                     changeFeeRequiredAmt++;
                 }
@@ -1676,7 +1676,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             transaction.addOutput(1L, address);
         }
 
-        long fee = (long)Math.floor(transaction.getVirtualSize() * feeRate);
+        long fee = (long)Math.floor(getCoin().getFeeSize(transaction.getVirtualSize()) * feeRate);
         return maxInputValue - fee;
     }
 
