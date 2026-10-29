@@ -39,11 +39,11 @@ public class LitVmLinkTest {
     public void walletEncryptionCoversSeparateAccount() throws MnemonicException {
         for(LitVmLink link : new LitVmLink[] {LitVmLink.fromMnemonic(WORDS, 0), LitVmLink.fromPrivateKey(PRIVATE_KEY)}) {
             Wallet wallet = new Wallet();
-            wallet.setPolicyType(PolicyType.SINGLE);
+            wallet.setPolicyType(PolicyType.SINGLE_HD);
             wallet.setScriptType(ScriptType.P2WPKH);
             DeterministicSeed walletSeed = new DeterministicSeed("absent essay fox snake vast pumpkin height crouch silent bulb excuse razor", "", 0, DeterministicSeed.Type.BIP39);
-            wallet.getKeystores().add(Keystore.fromSeed(walletSeed, wallet.getScriptType().getDefaultDerivation()));
-            wallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE, ScriptType.P2WPKH, wallet.getKeystores(), 1));
+            wallet.getKeystores().add(Keystore.fromSeed(walletSeed, PolicyType.SINGLE_HD, wallet.getScriptType().getDefaultDerivation()));
+            wallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE_HD, ScriptType.P2WPKH, wallet.getKeystores(), 1));
             wallet.setLitVmLink(link);
 
             KeyDeriver keyDeriver = new Argon2KeyDeriver();

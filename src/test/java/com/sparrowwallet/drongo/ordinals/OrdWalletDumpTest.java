@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.ordinals;
 
+import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.Utils;
@@ -62,7 +63,7 @@ public class OrdWalletDumpTest {
         Map<ScriptType, Address> addresses = OrdWalletDump.addresses(fixture().getFirst());
         Assertions.assertEquals(List.of(ScriptType.P2WPKH, ScriptType.P2TR, ScriptType.P2SH_P2WPKH, ScriptType.P2PKH), List.copyOf(addresses.keySet()));
         for(Map.Entry<ScriptType, Address> entry : addresses.entrySet()) {
-            Assertions.assertEquals(entry.getKey().getOutputScript(fixture().getFirst().publicKey()), entry.getValue().getOutputScript());
+            Assertions.assertEquals(entry.getKey().getOutputScript(PolicyType.SINGLE_HD, fixture().getFirst().publicKey()), entry.getValue().getOutputScript());
         }
     }
 

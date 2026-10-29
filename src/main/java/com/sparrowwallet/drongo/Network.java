@@ -1,6 +1,13 @@
 package com.sparrowwallet.drongo;
 
+import com.sparrowwallet.drongo.protocol.BlockHeader;
+import com.sparrowwallet.drongo.protocol.HeaderCheckpoints;
+import com.sparrowwallet.drongo.protocol.Sha256Hash;
+
+import java.math.BigInteger;
+import java.util.EnumMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * The network axis: which network of the active {@link Coin} the application is running against.
@@ -29,6 +36,7 @@ public enum Network {
     private final String home;
 
     private static Network currentNetwork;
+    private static final Map<Network, BlockHeader> GENESIS_HEADERS = new EnumMap<>(Network.class);
 
     private Coin.ChainParams params() {
         return Coin.get().params(this);
@@ -68,6 +76,16 @@ public enum Network {
         return params().spAddressHrp();
     }
 
+    /** Null on chains without silent payments support. */
+    public String getSilentPaymentsScanKeyHrp() {
+        return params().spScanKeyHrp();
+    }
+
+    /** Null on chains without silent payments support. */
+    public String getSilentPaymentsSpendKeyHrp() {
+        return params().spSpendKeyHrp();
+    }
+
     /** Null on chains without MWEB (everything except Litecoin). */
     public String getMwebAddressHrp() {
         return params().mwebAddressHrp();
@@ -87,6 +105,65 @@ public enum Network {
 
     public int getDefaultPort() {
         return params().defaultPort();
+    }
+
+    /**
+     * The maximum (easiest) allowed difficulty target for this network, decoded from the consensus powLimit compact bits.
+     */
+    public BigInteger getProofOfWorkLimit() {
+        if(this == REGTEST) {
+            return Utils.decodeCompactBits(0x207fffffL);
+        } else if(this == SIGNET) {
+            return Utils.decodeCompactBits(0x1e0377aeL);
+        } else if(this == TESTNET4) {
+            return Utils.decodeCompactBits(0x1d00ffffL);
+        }
+
+        return Utils.decodeCompactBits(0x1e0fffffL);
+    }
+
+    /**
+     * Whether block headers on this network can be verified against compiled in checkpoints and proof of work.
+     * Litecoin proof of work is scrypt, not the double SHA256 BlockHeader.verifyProofOfWork checks, and no Litecoin checkpoints are compiled in,
+     * so header verification stays off until both exist. The same holds for every other coin (scrypt, and AuxPoW on the Dogecoin family).
+     */
+    public boolean supportsHeaderVerification() {
+        return false;
+    }
+
+    /**
+     * The network's genesis block header, parsed from its compiled-in serialization on first use.
+     * Only Litecoin genesis headers are compiled in, and nothing reads them while header verification is off.
+     */
+    public BlockHeader getGenesisHeader() {
+        if(Coin.get() != Coin.LITECOIN) {
+            throw new UnsupportedOperationException("No genesis header compiled in for " + Coin.get().getName());
+        }
+
+        synchronized(GENESIS_HEADERS) {
+            return GENESIS_HEADERS.computeIfAbsent(this, network -> new BlockHeader(Utils.hexToBytes(network.getGenesisHeaderHex())));
+        }
+    }
+
+    public Sha256Hash getGenesisHash() {
+        return getGenesisHeader().getHash();
+    }
+
+    private String getGenesisHeaderHex() {
+        return switch(this) {
+            case MAINNET -> "010000000000000000000000000000000000000000000000000000000000000000000000d9ced4ed1130f7b7faad9be25323ffafa33232a17c3edf6cfd97bee6bafbdd97b9aa8e4ef0ff0f1ecd513f7c";
+            case TESTNET -> "010000000000000000000000000000000000000000000000000000000000000000000000d9ced4ed1130f7b7faad9be25323ffafa33232a17c3edf6cfd97bee6bafbdd97f60ba158f0ff0f1ee1790400";
+            case REGTEST -> "010000000000000000000000000000000000000000000000000000000000000000000000d9ced4ed1130f7b7faad9be25323ffafa33232a17c3edf6cfd97bee6bafbdd97dae5494dffff7f2000000000";
+            case SIGNET -> "0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a008f4d5fae77031e8ad22203";
+            case TESTNET4 -> "0100000000000000000000000000000000000000000000000000000000000000000000004e7b2b9128fe0291db0693af2ae418b767e657cd407e80cb1434221eaea7a07a046f3566ffff001dbb0c7817";
+        };
+    }
+
+    /**
+     * The pinned header hashes compiled in for this network, one per difficulty period. Regtest has none, anchoring at its genesis header instead.
+     */
+    public HeaderCheckpoints getHeaderCheckpoints() {
+        return HeaderCheckpoints.get(this);
     }
 
     public boolean hasP2PKHAddressPrefix(String address) {

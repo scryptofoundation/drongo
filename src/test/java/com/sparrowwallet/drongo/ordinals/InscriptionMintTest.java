@@ -31,16 +31,16 @@ public class InscriptionMintTest {
         previousCoin = Coin.beginScope(Coin.LITECOIN);
         DeterministicSeed seed = new DeterministicSeed(new ArrayList<>(WORDS), "", 0, DeterministicSeed.Type.BIP39);
         wallet = new Wallet("segwit");
-        wallet.setPolicyType(PolicyType.SINGLE);
+        wallet.setPolicyType(PolicyType.SINGLE_HD);
         wallet.setScriptType(ScriptType.P2WPKH);
-        Keystore keystore = Keystore.fromSeed(seed, ScriptType.P2WPKH.getDefaultDerivation());
+        Keystore keystore = Keystore.fromSeed(seed, PolicyType.SINGLE_HD, ScriptType.P2WPKH.getDefaultDerivation());
         wallet.getKeystores().add(keystore);
-        wallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE, ScriptType.P2WPKH, wallet.getKeystores(), 1));
+        wallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE_HD, ScriptType.P2WPKH, wallet.getKeystores(), 1));
         WalletNode receive = wallet.getNode(KeyPurpose.RECEIVE);
         receive.fillToIndex(10);
         wallet.getNode(KeyPurpose.CHANGE).fillToIndex(10);
         nodes.addAll(receive.getChildren());
-        destination = ScriptType.P2TR.getAddress(ECKey.fromPrivate(BigInteger.valueOf(42)));
+        destination = ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, ECKey.fromPrivate(BigInteger.valueOf(42)));
     }
 
     @AfterEach
@@ -204,7 +204,7 @@ public class InscriptionMintTest {
     @Test
     public void mwebFundingRefused() {
         Wallet mweb = new Wallet("mweb");
-        mweb.setPolicyType(PolicyType.SINGLE);
+        mweb.setPolicyType(PolicyType.SINGLE_HD);
         mweb.setScriptType(ScriptType.MWEB);
         Assertions.assertThrows(IllegalArgumentException.class, () -> InscriptionMint.commit(mweb, textPlan(), List.of(), 2.0, 1.0));
 

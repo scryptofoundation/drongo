@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.ordinals;
 
+import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.address.Address;
@@ -26,10 +27,10 @@ public class MoveInTest {
     public void setUp() {
         previousCoin = Coin.beginScope(Coin.LITECOIN);
         Network.set(Network.REGTEST);
-        taproot1 = ScriptType.P2TR.getAddress(ECKey.fromPrivate(BigInteger.valueOf(101)));
-        taproot2 = ScriptType.P2TR.getAddress(ECKey.fromPrivate(BigInteger.valueOf(102)));
-        runesDestination = ScriptType.P2TR.getAddress(ECKey.fromPrivate(BigInteger.valueOf(103)));
-        plainDestination = ScriptType.P2WPKH.getAddress(ECKey.fromPrivate(BigInteger.valueOf(104)));
+        taproot1 = ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, ECKey.fromPrivate(BigInteger.valueOf(101)));
+        taproot2 = ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, ECKey.fromPrivate(BigInteger.valueOf(102)));
+        runesDestination = ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, ECKey.fromPrivate(BigInteger.valueOf(103)));
+        plainDestination = ScriptType.P2WPKH.getAddress(PolicyType.SINGLE_HD, ECKey.fromPrivate(BigInteger.valueOf(104)));
     }
 
     @AfterEach
@@ -143,7 +144,7 @@ public class MoveInTest {
             List<byte[]> pushes = input.getWitness().getPushes();
             Assertions.assertEquals(2, pushes.size());
             ECKey pubKey = ECKey.fromPublicOnly(pushes.get(1));
-            Sha256Hash hash = tx.hashForWitnessSignature(i, ScriptType.P2PKH.getOutputScript(pubKey), found.get(i).output().getValue(), SigHash.ALL);
+            Sha256Hash hash = tx.hashForWitnessSignature(i, ScriptType.P2PKH.getOutputScript(PolicyType.SINGLE_HD, pubKey), found.get(i).output().getValue(), SigHash.ALL);
             TransactionSignature signature = TransactionSignature.decodeFromBitcoin(pushes.get(0), true);
             Assertions.assertTrue(pubKey.verify(hash.getBytes(), signature), "input " + i);
         }
@@ -159,8 +160,8 @@ public class MoveInTest {
         //Nested segwit: the scriptSig pushes the P2WPKH redeem script, the witness is [sig, pubkey]
         TransactionInput nested = tx.getInputs().get(0);
         ECKey nestedKey = ECKey.fromPublicOnly(nested.getWitness().getPushes().get(1));
-        Assertions.assertEquals(ScriptType.P2WPKH.getOutputScript(nestedKey), nested.getScriptSig().getFirstNestedScript());
-        Sha256Hash nestedHash = tx.hashForWitnessSignature(0, ScriptType.P2PKH.getOutputScript(nestedKey), found.get(0).output().getValue(), SigHash.ALL);
+        Assertions.assertEquals(ScriptType.P2WPKH.getOutputScript(PolicyType.SINGLE_HD, nestedKey), nested.getScriptSig().getFirstNestedScript());
+        Sha256Hash nestedHash = tx.hashForWitnessSignature(0, ScriptType.P2PKH.getOutputScript(PolicyType.SINGLE_HD, nestedKey), found.get(0).output().getValue(), SigHash.ALL);
         Assertions.assertTrue(nestedKey.verify(nestedHash.getBytes(), TransactionSignature.decodeFromBitcoin(nested.getWitness().getPushes().get(0), true)));
 
         //Taproot key path: one 64 byte Schnorr signature
@@ -172,7 +173,7 @@ public class MoveInTest {
         TransactionInput legacy = tx.getInputs().get(2);
         List<ScriptChunk> chunks = legacy.getScriptSig().getChunks();
         ECKey legacyKey = ECKey.fromPublicOnly(chunks.get(1).getData());
-        Sha256Hash legacyHash = tx.hashForLegacySignature(2, ScriptType.P2PKH.getOutputScript(legacyKey), SigHash.ALL);
+        Sha256Hash legacyHash = tx.hashForLegacySignature(2, ScriptType.P2PKH.getOutputScript(PolicyType.SINGLE_HD, legacyKey), SigHash.ALL);
         Assertions.assertTrue(legacyKey.verify(legacyHash.getBytes(), TransactionSignature.decodeFromBitcoin(chunks.get(0).getData(), true)));
     }
 }

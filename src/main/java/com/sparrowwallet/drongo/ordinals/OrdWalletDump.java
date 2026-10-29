@@ -3,6 +3,7 @@ package com.sparrowwallet.drongo.ordinals;
 import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.crypto.ECKey;
+import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.protocol.Base58;
 import com.sparrowwallet.drongo.protocol.ScriptType;
 
@@ -147,7 +148,7 @@ public final class OrdWalletDump {
         List<ScriptType> types = key.isCompressed() ? List.of(ScriptType.P2WPKH, ScriptType.P2TR, ScriptType.P2SH_P2WPKH, ScriptType.P2PKH) : List.of(ScriptType.P2PKH);
         Map<ScriptType, Address> addresses = new LinkedHashMap<>();
         for(ScriptType type : types) {
-            addresses.put(type, type.getAddress(publicKey));
+            addresses.put(type, type.getAddress(PolicyType.SINGLE_HD, publicKey));
         }
         return addresses;
     }

@@ -157,36 +157,36 @@ public enum Coin {
                 //Electrum-LTC adds before emitting - so exported keys were 0x80-prefixed (valid Bitcoin
                 //WIFs, rejected by every Litecoin wallet), and standard 0xB0 Litecoin keys would not
                 //import. REGTEST already used the correct 239.
-                case MAINNET -> new ChainParams(48, "L", 50, "M", "ltc", "ltcsp", "ltcmweb",
+                case MAINNET -> new ChainParams(48, "L", 50, "M", "ltc", "ltcsp", "ltcspscan", "ltcspspend", "ltcmweb",
                         ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 176, 9332);
-                case TESTNET -> new ChainParams(111, "mn", 58, "Q", "tltc", "tltcsp", "tmweb",
+                case TESTNET -> new ChainParams(111, "mn", 58, "Q", "tltc", "tltcsp", "tltcspscan", "tltcspspend", "tmweb",
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19332);
-                case REGTEST -> new ChainParams(111, "mn", 196, "2", "rltc", "rltcsp", "tmweb",
+                case REGTEST -> new ChainParams(111, "mn", 196, "2", "rltc", "rltcsp", "tltcspscan", "tltcspspend", "tmweb",
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19443);
-                case SIGNET -> new ChainParams(111, "mn", 196, "2", "tb", "tsp", "tmweb",
+                case SIGNET -> new ChainParams(111, "mn", 196, "2", "tb", "tsp", "tspscan", "tspspend", "tmweb",
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 38332);
-                case TESTNET4 -> new ChainParams(111, "mn", 196, "2", "tb", "tsp", "tmweb",
+                case TESTNET4 -> new ChainParams(111, "mn", 196, "2", "tb", "tsp", "tspscan", "tspspend", "tmweb",
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 48332);
             };
             //Dogecoin: no segwit (DEPLOYMENT_SEGWIT nTimeout=0, never activated), so no bech32 HRP.
             //Core defines dgub/dgpv but much of the ecosystem uses standard xpub/xprv - dgub is the
             //serialisation default here, with xpub accepted on import.
             case DOGECOIN -> switch(network) {
-                case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null,
+                case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 22555);
                 //Testnet (dogecoin/dogecoin v1.14.9 chainparams.cpp CTestNetParams, chainparamsbase.cpp): P2PKH 113
                 //"n", P2SH 196 "2", WIF 241, standard tpub/tprv (0x043587cf/0x04358394), RPC 44555.
-                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null, null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 44555);
                 default -> throw unverified(network);
             };
             //Pepecoin: Dogecoin Core derivative, inherits dgub/dgpv unchanged. No segwit, no bech32.
             case PEPECOIN -> switch(network) {
-                case MAINNET -> new ChainParams(56, "P", 22, "9A", null, null, null,
+                case MAINNET -> new ChainParams(56, "P", 22, "9A", null, null, null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 33873);
                 //Testnet (pepecoinppc/pepecoin @4fb5a0cd CTestNetParams, chainparamsbase RPC 44873): P2PKH 113 "n",
                 //P2SH 196 "2", WIF 241, tpub/tprv. No segwit. Alive 2026-10-23 (tip ~1.55M).
-                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null, null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 44873);
                 default -> throw unverified(network);
             };
@@ -194,11 +194,11 @@ public enum Coin {
             //Version byte 47 straddles the K/L base58 boundary, so P2PKH addresses lead with either -
             //published examples only ever show "L...", but "K..." is equally valid and must be accepted.
             case LUCKYCOIN -> switch(network) {
-                case MAINNET -> new ChainParams(47, "KL", 5, "3", null, null, null,
+                case MAINNET -> new ChainParams(47, "KL", 5, "3", null, null, null, null, null,
                         ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 175, 9918);
                 //Testnet (LuckycoinFoundation/Luckycoin v5.0.1 @8b1fa2b chainparams.cpp L320-324, chainparamsbase.cpp
                 //L48): P2PKH 113 "n", P2SH 196 "2", WIF 241, standard tpub/tprv, RPC 19918.
-                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null, null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 19918);
                 default -> throw unverified(network);
             };
@@ -206,24 +206,24 @@ public enum Coin {
             //e5be24df... matches api.nintondo.io): P2PKH 25 "B", P2SH 30 "D", WIF 153, dgub/dgpv, bech32 "bel" with
             //segwit from height 144000. bel1 P2WPKH outputs are in live use (checked 2026-10-28).
             case BELLSCOIN -> switch(network) {
-                case MAINNET -> new ChainParams(25, "B", 30, "D", "bel", null, null,
+                case MAINNET -> new ChainParams(25, "B", 30, "D", "bel", null, null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 153, 8332);
                 //Testnet as Bells Core v3, which the live network runs (BellsChain/bellscoin v3.0.0-rc2 @59addbbe
                 //kernel/chainparams.cpp CTestNetParams, chainparamsbase.cpp): P2PKH 33 "E", P2SH 22 "9A", WIF 158,
                 //bech32 "tbel", RPC 18332. Core keeps mainnet's dgub/dgpv on testnet, but those headers are mainnet-only
                 //here (as for Junkcoin), so testnet keys use tpub/tprv; addresses do not depend on the key prefix.
-                case TESTNET -> new ChainParams(33, "E", 22, "9A", "tbel", null, null,
+                case TESTNET -> new ChainParams(33, "E", 22, "9A", "tbel", null, null, null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 158, 18332);
                 default -> throw unverified(network);
             };
             //Dingocoin: address/key identity identical to Dogecoin (P2PKH 30 "D", P2SH 22 "9A", WIF 158,
             //dgub/dgpv). Distinct only by network magic and ports, which the backend handles.
             case DINGOCOIN -> switch(network) {
-                case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null,
+                case MAINNET -> new ChainParams(30, "D", 22, "9A", null, null, null, null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 158, 34646);
                 //Testnet (dingocoin/dingocoin v1.18.1.1 @ce1acdab chainparams.cpp CTestNetParams, chainparamsbase.cpp
                 //L48): P2PKH 113 "n", P2SH 196 "2", WIF 241, standard tpub/tprv, RPC 44556.
-                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null,
+                case TESTNET -> new ChainParams(113, "n", 196, "2", null, null, null, null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 44556);
                 default -> throw unverified(network);
             };
@@ -231,7 +231,7 @@ public enum Coin {
             //xpub/xprv like Luckycoin, not dgub. P2SH 5 is Bitcoin's script version, so JKC P2SH
             //addresses are byte-identical to Bitcoin's - same situation as Luckycoin.
             case JUNKCOIN -> switch(network) {
-                case MAINNET -> new ChainParams(16, "7", 5, "3", null, null, null,
+                case MAINNET -> new ChainParams(16, "7", 5, "3", null, null, null, null, null,
                         ExtendedKey.Header.xprv, ExtendedKey.Header.xpub, 144, 9771);
                 //Testnet (CTestNetParams + CBaseChainParams TESTNET, junkcoin-core v4 @0e5279a): P2PKH 111 "m/n",
                 //P2SH 5 (unchanged from mainnet), WIF 239, port 19771 for P2P and RPC. Its genesis equals
@@ -241,7 +241,7 @@ public enum Coin {
                 //Bech32 "tjc": segwit is active from testnet block 140000 and taproot from 160000 (v4
                 //chainparams), and the Junkcoin bridge custody is a tjc1p address. Mainnet stays without one
                 //until its scheduled segwit height (1145000) has passed.
-                case TESTNET -> new ChainParams(111, "mn", 5, "3", "tjc", null, null,
+                case TESTNET -> new ChainParams(111, "mn", 5, "3", "tjc", null, null, null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 19771);
                 default -> throw unverified(network);
             };
@@ -582,7 +582,7 @@ public enum Coin {
      * Chain constants for one Coin/Network combination. Mirrors the fields the Network enum carried
      * before the coin axis was introduced, so Network's getters are one-line delegations.
      *
-     * bech32Hrp, spHrp and mwebHrp are null on chains without segwit, silent payments or MWEB.
+     * bech32Hrp, the silent payment HRPs and mwebHrp are null on chains without segwit, silent payments or MWEB.
      *
      * defaultPort is the node's JSON-RPC port (chainparamsbase nRPCPort), NOT its P2P port - every caller
      * uses it to reach Core over RPC. The two are adjacent on most of these chains, which made it easy to
@@ -597,6 +597,8 @@ public enum Coin {
             String p2shAddressPrefix,
             String bech32AddressHrp,
             String spAddressHrp,
+            String spScanKeyHrp,
+            String spSpendKeyHrp,
             String mwebAddressHrp,
             ExtendedKey.Header xprvHeader,
             ExtendedKey.Header xpubHeader,

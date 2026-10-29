@@ -6,13 +6,15 @@ import com.sparrowwallet.drongo.protocol.ScriptType;
 import static com.sparrowwallet.drongo.protocol.ScriptType.*;
 
 public enum PolicyType {
-    SINGLE("Single Signature", P2WPKH), MULTI("Multi Signature", P2WSH), CUSTOM("Custom", P2WSH);
+    SINGLE_HD("Single Signature HD", "Single Signature HD", P2WPKH), MULTI_HD("Multi Signature HD", "Multi Signature HD", P2WSH), SINGLE_SP("Single Signature SP", "Single Signature SP (Silent Payments)", P2TR);
 
-    private String name;
-    private ScriptType defaultScriptType;
+    private final String name;
+    private final String description;
+    private final ScriptType defaultScriptType;
 
-    PolicyType(String name, ScriptType defaultScriptType) {
+    PolicyType(String name, String description, ScriptType defaultScriptType) {
         this.name = name;
+        this.description = description;
         this.defaultScriptType = defaultScriptType;
     }
 
@@ -20,11 +22,15 @@ public enum PolicyType {
         return name;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
     public ScriptType getDefaultScriptType() {
         //The segwit defaults (P2WPKH/P2WSH) are invalid on chains without segwit - every merge-mined
         //Scrypto chain except Litecoin. Fall back to the legacy equivalent: single-sig -> P2PKH, multisig -> P2SH.
         if(!Coin.get().supports(defaultScriptType)) {
-            return this == SINGLE ? P2PKH : P2SH;
+            return this == MULTI_HD ? P2SH : P2PKH;
         }
 
         return defaultScriptType;

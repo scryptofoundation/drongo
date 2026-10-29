@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.protocol;
 
+import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.Utils;
 import com.sparrowwallet.drongo.crypto.ECKey;
 import org.junit.jupiter.api.Assertions;
@@ -74,7 +75,7 @@ public class TapScriptTest {
         Transaction spend = new Transaction();
         spend.setVersion(2);
         spend.addInput(Sha256Hash.wrap("52b559ee298a9e57b1b6e743a53e68c9d9a7e75da6b090cfdd8e2bb260f3636e"), 0, new Script(new byte[0]));
-        spend.addOutput(10_000, ScriptType.P2TR.getOutputScript(key.getTweakedOutputKey()));
+        spend.addOutput(10_000, ScriptType.P2TR.getOutputScript(PolicyType.SINGLE_HD, key.getTweakedOutputKey()));
 
         TransactionSignature signature = TapScript.signScriptPath(spend, 0, List.of(spent), script, key);
         Sha256Hash hash = spend.hashForTaprootSignature(List.of(spent), 0, true, script, SigHash.DEFAULT, null);

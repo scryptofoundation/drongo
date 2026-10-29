@@ -2,6 +2,7 @@ package com.sparrowwallet.drongo.ordinals;
 
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.crypto.ECKey;
+import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.protocol.*;
 import com.sparrowwallet.drongo.psbt.PSBT;
 import com.sparrowwallet.drongo.psbt.PSBTInput;
@@ -89,7 +90,7 @@ public final class MoveIn {
         transaction.setVersion(2);
         for(Found input : inputs) {
             TransactionSignature dummy = TransactionSignature.dummy(input.type() == ScriptType.P2TR ? TransactionSignature.Type.SCHNORR : TransactionSignature.Type.ECDSA);
-            TransactionInput txInput = dummySignatures ? input.type().addSpendingInput(transaction, input.output(), input.key().publicKey(), dummy)
+            TransactionInput txInput = dummySignatures ? input.type().addSpendingInput(PolicyType.SINGLE_HD, transaction, input.output(), input.key().publicKey(), dummy)
                     : transaction.addInput(input.output().getHash(), input.output().getIndex(), new Script(new byte[0]));
             txInput.setSequenceNumber(TransactionInput.SEQUENCE_RBF_ENABLED);
         }
@@ -119,13 +120,13 @@ public final class MoveIn {
             PSBTInput psbtInput = psbt.getPsbtInputs().get(i);
             ECKey pubKey = input.key().publicKey();
             if(input.type() == ScriptType.P2SH_P2WPKH) {
-                psbtInput.setRedeemScript(ScriptType.P2WPKH.getOutputScript(pubKey));
+                psbtInput.setRedeemScript(ScriptType.P2WPKH.getOutputScript(PolicyType.SINGLE_HD, pubKey));
             }
-            if(!psbtInput.sign(input.type().getOutputKey(input.key().signingKey()))) {
+            if(!psbtInput.sign(input.type().getOutputKey(PolicyType.SINGLE_HD, input.key().signingKey()))) {
                 throw new IllegalStateException("Could not sign the input spending " + input.output().getHash() + ":" + input.output().getIndex());
             }
             TransactionSignature signature = psbtInput.isTaproot() ? psbtInput.getTapKeyPathSignature() : psbtInput.getPartialSignature(pubKey);
-            TransactionInput finalized = input.type().addSpendingInput(new Transaction(), input.output(), pubKey, signature);
+            TransactionInput finalized = input.type().addSpendingInput(PolicyType.SINGLE_HD, new Transaction(), input.output(), pubKey, signature);
             psbtInput.setFinalScriptSig(finalized.getScriptSig());
             psbtInput.setFinalScriptWitness(finalized.getWitness());
         }

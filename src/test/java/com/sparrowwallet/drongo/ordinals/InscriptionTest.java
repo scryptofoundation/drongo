@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.ordinals;
 
+import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.Utils;
 import com.sparrowwallet.drongo.crypto.ECKey;
 import com.sparrowwallet.drongo.protocol.Script;
@@ -61,7 +62,7 @@ public class InscriptionTest {
     @Test
     public void maxBodyKeepsRevealUnder400kWeight() {
         ECKey key = ECKey.fromPrivate(Utils.hexToBytes("0101010101010101010101010101010101010101010101010101010101010101"));
-        List<Script> destination = List.of(ScriptType.P2TR.getOutputScript(key.getTweakedOutputKey()));
+        List<Script> destination = List.of(ScriptType.P2TR.getOutputScript(PolicyType.SINGLE_HD, key.getTweakedOutputKey()));
         int max = Inscription.maxBodyBytes("image/png");
         Assertions.assertTrue(max > 390_000);
         Assertions.assertTrue(new Inscription("image/png", new byte[max], null).revealWeight(destination) <= Inscription.MAX_REVEAL_WEIGHT);

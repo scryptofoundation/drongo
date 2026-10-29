@@ -42,9 +42,9 @@ public class LitVmLink extends Persistable implements EncryptableItem {
     private final int accountIndex;
     private final byte[] secret;
     private final EncryptedData encryptedSecret;
-    private final long creationTimeSeconds;
+    private final long creationTimeMillis;
 
-    private LitVmLink(Source source, EvmAddress address, int accountIndex, byte[] secret, EncryptedData encryptedSecret, long creationTimeSeconds) {
+    private LitVmLink(Source source, EvmAddress address, int accountIndex, byte[] secret, EncryptedData encryptedSecret, long creationTimeMillis) {
         if(source != Source.WALLET_SEED && secret == null && encryptedSecret == null) {
             throw new IllegalArgumentException("A separate LitVM account needs its secret");
         }
@@ -53,7 +53,7 @@ public class LitVmLink extends Persistable implements EncryptableItem {
         this.accountIndex = accountIndex;
         this.secret = secret;
         this.encryptedSecret = encryptedSecret;
-        this.creationTimeSeconds = creationTimeSeconds;
+        this.creationTimeMillis = creationTimeMillis;
     }
 
     /** Links the account derived from the wallet's own seed. The caller derives it from the (decrypted) seed. */
@@ -92,8 +92,8 @@ public class LitVmLink extends Persistable implements EncryptableItem {
     }
 
     /** Rebuilds a stored link; exactly one of secret and encryptedSecret is set for a separate account. */
-    public static LitVmLink restore(Source source, EvmAddress address, int accountIndex, byte[] secret, EncryptedData encryptedSecret, long creationTimeSeconds) {
-        return new LitVmLink(source, address, accountIndex, secret, encryptedSecret, creationTimeSeconds);
+    public static LitVmLink restore(Source source, EvmAddress address, int accountIndex, byte[] secret, EncryptedData encryptedSecret, long creationTimeMillis) {
+        return new LitVmLink(source, address, accountIndex, secret, encryptedSecret, creationTimeMillis);
     }
 
     public Source getSource() {
@@ -176,8 +176,8 @@ public class LitVmLink extends Persistable implements EncryptableItem {
     }
 
     @Override
-    public long getCreationTimeSeconds() {
-        return creationTimeSeconds;
+    public long getCreationTimeMillis() {
+        return creationTimeMillis;
     }
 
     public LitVmLink encrypt(Key key) {
@@ -187,7 +187,7 @@ public class LitVmLink extends Persistable implements EncryptableItem {
 
         KeyCrypter keyCrypter = getEncryptionType().getCrypter().getKeyCrypter();
         EncryptedData encrypted = keyCrypter.encrypt(secret, null, key);
-        LitVmLink link = new LitVmLink(source, address, accountIndex, null, encrypted, creationTimeSeconds);
+        LitVmLink link = new LitVmLink(source, address, accountIndex, null, encrypted, creationTimeMillis);
         link.setId(getId());
         return link;
     }
@@ -213,7 +213,7 @@ public class LitVmLink extends Persistable implements EncryptableItem {
 
         KeyCrypter keyCrypter = getEncryptionType().getCrypter().getKeyCrypter();
         byte[] decrypted = keyCrypter.decrypt(encryptedSecret, key);
-        LitVmLink link = new LitVmLink(source, address, accountIndex, decrypted, null, creationTimeSeconds);
+        LitVmLink link = new LitVmLink(source, address, accountIndex, decrypted, null, creationTimeMillis);
         link.setId(getId());
         return link;
     }
@@ -226,7 +226,7 @@ public class LitVmLink extends Persistable implements EncryptableItem {
     }
 
     public LitVmLink copy() {
-        LitVmLink link = new LitVmLink(source, address, accountIndex, secret == null ? null : Arrays.copyOf(secret, secret.length), encryptedSecret, creationTimeSeconds);
+        LitVmLink link = new LitVmLink(source, address, accountIndex, secret == null ? null : Arrays.copyOf(secret, secret.length), encryptedSecret, creationTimeMillis);
         link.setId(getId());
         return link;
     }

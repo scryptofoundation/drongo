@@ -91,7 +91,7 @@ public class CoinTest {
         //outside drongo (plain Python BIP39, BIP32 and BIP173; the same script gives BIP84's bc1qcr8te...).
         Coin.set(Coin.BELLSCOIN);
         ECKey key = ECKey.fromPublicOnly(Utils.hexToBytes("02688337c538eb7aaed6dfdd1dc572f30ec288eb833f19c141f9ec82795842da02"));
-        Address address = ScriptType.P2WPKH.getAddress(key);
+        Address address = ScriptType.P2WPKH.getAddress(PolicyType.SINGLE_HD, key);
         Assertions.assertEquals("bel1qh07eu8daq4xvgefnq567dfrv8dssxm0ruw2q2a", address.toString());
         Assertions.assertArrayEquals(address.getData(), Address.fromString(address.toString()).getData());
     }
@@ -327,12 +327,12 @@ public class CoinTest {
     @Test
     public void testAddressableScriptTypesAreFilteredByCoin() {
         Coin.set(Coin.LITECOIN);
-        List<ScriptType> litecoinTypes = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE);
+        List<ScriptType> litecoinTypes = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE_HD);
         Assertions.assertTrue(litecoinTypes.contains(ScriptType.P2WPKH), "Litecoin should still offer segwit");
 
         for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
             Coin.set(coin);
-            List<ScriptType> types = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE);
+            List<ScriptType> types = ScriptType.getAddressableScriptTypes(PolicyType.SINGLE_HD);
             Assertions.assertFalse(types.isEmpty(), coin + " must still offer legacy script types");
             Assertions.assertTrue(types.contains(ScriptType.P2PKH), coin + " should offer P2PKH");
 

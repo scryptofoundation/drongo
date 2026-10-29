@@ -31,16 +31,16 @@ public class CollectibleTransactionsTest {
         previousCoin = Coin.beginScope(Coin.LITECOIN);
         DeterministicSeed seed = new DeterministicSeed(new ArrayList<>(WORDS), "", 0, DeterministicSeed.Type.BIP39);
         wallet = new Wallet("taproot");
-        wallet.setPolicyType(PolicyType.SINGLE);
+        wallet.setPolicyType(PolicyType.SINGLE_HD);
         wallet.setScriptType(ScriptType.P2TR);
-        Keystore keystore = Keystore.fromSeed(seed, ScriptType.P2TR.getDefaultDerivation());
+        Keystore keystore = Keystore.fromSeed(seed, PolicyType.SINGLE_HD, ScriptType.P2TR.getDefaultDerivation());
         wallet.getKeystores().add(keystore);
-        wallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE, ScriptType.P2TR, wallet.getKeystores(), 1));
+        wallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE_HD, ScriptType.P2TR, wallet.getKeystores(), 1));
         WalletNode receive = wallet.getNode(KeyPurpose.RECEIVE);
         receive.fillToIndex(10);
         wallet.getNode(KeyPurpose.CHANGE).fillToIndex(10);
         nodes.addAll(receive.getChildren());
-        recipient = ScriptType.P2TR.getAddress(ECKey.fromPrivate(BigInteger.valueOf(42)));
+        recipient = ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, ECKey.fromPrivate(BigInteger.valueOf(42)));
     }
 
     @AfterEach
