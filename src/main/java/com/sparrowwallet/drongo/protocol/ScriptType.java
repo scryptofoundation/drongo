@@ -1841,7 +1841,7 @@ public enum ScriptType {
      */
     public static List<ScriptType> getAddressableScriptTypes(PolicyType policyType) {
         return Arrays.stream(ADDRESSABLE_TYPES)
-                .filter(scriptType -> scriptType.isAllowed(policyType) && Coin.get().supports(scriptType))
+                .filter(scriptType -> scriptType.isAllowed(policyType) && Coin.get().supports(scriptType) && (policyType != PolicyType.SINGLE_SP || Coin.get().supportsSilentPayments()))
                 .collect(Collectors.toList());
     }
 

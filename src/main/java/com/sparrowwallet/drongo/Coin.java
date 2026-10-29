@@ -486,6 +486,14 @@ public enum Coin {
         return mweb;
     }
 
+    /**
+     * Silent payment wallets need the chain's silent payment HRPs, which only Litecoin defines here (upstream's
+     * scheme, with ltcsp prefixes). The other coins have neither the HRPs nor Taproot.
+     */
+    public boolean supportsSilentPayments() {
+        return isTaprootSupported() && params(Network.get()).spAddressHrp() != null;
+    }
+
     public static Coin get() {
         Coin scoped = threadCoin.get();
         if(scoped != null) {

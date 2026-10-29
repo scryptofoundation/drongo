@@ -40,6 +40,20 @@ public class CoinTest {
     }
 
     /**
+     * Upstream's silent payment wallets are offered only where the chain has silent payment HRPs and Taproot, which
+     * here is Litecoin alone. Every other coin gets no silent payment script type to choose.
+     */
+    @Test
+    public void silentPaymentsOnlyOnLitecoin() {
+        for(Coin coin : Coin.values()) {
+            Coin.set(coin);
+            Assertions.assertEquals(coin == Coin.LITECOIN, coin.supportsSilentPayments(), coin.toString());
+            Assertions.assertEquals(coin == Coin.LITECOIN, !ScriptType.getAddressableScriptTypes(PolicyType.SINGLE_SP).isEmpty(), coin.toString());
+            Assertions.assertFalse(ScriptType.getAddressableScriptTypes(PolicyType.SINGLE_HD).isEmpty(), coin.toString());
+        }
+    }
+
+    /**
      * Bellscoin mainnet as Bells Core v3 (Nintondo/bellscoinV3 kernel/chainparams.cpp CMainParams): bech32_hrp "bel",
      * SegwitHeight 144000. bel1 P2WPKH outputs are in live use. Taproot is a separate BIP9 deployment (bit 2,
      * min_activation_height 188000) whose activation is not verified, so P2TR stays off.
