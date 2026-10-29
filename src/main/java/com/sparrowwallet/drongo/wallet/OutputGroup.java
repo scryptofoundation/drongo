@@ -8,6 +8,13 @@ import java.util.List;
 import static com.sparrowwallet.drongo.protocol.Transaction.WITNESS_SCALE_FACTOR;
 
 public class OutputGroup {
+    /**
+     * Input weight one group may reach: half the 400,000 weight-unit standard transaction limit, so two full groups
+     * still make a standard transaction. Grouping every coin at an address into one group built a non-standard
+     * transaction from 1,292 mined BELLS coins; an address with that many now spreads over several groups.
+     */
+    public static final long MAX_INPUT_WEIGHT = 200_000;
+
     private final List<BlockTransactionHashIndex> utxos = new ArrayList<>();
     private final ScriptType scriptType;
     private final int walletBlockHeight;
@@ -39,6 +46,11 @@ public class OutputGroup {
         depth = utxo.getHeight() <= 0 ? 0 : Math.min(depth, walletBlockHeight - utxo.getHeight() + 1);
         this.allInputsFromWallet &= allInputsFromWallet;
         this.spendLast |= spendLast;
+    }
+
+    /** Whether one more input keeps this group within {@link #MAX_INPUT_WEIGHT}. */
+    public boolean canAdd() {
+        return (utxos.size() + 1) * inputWeightUnits <= MAX_INPUT_WEIGHT;
     }
 
     public void remove(BlockTransactionHashIndex utxo) {

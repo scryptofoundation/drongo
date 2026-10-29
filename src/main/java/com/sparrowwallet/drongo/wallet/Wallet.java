@@ -1589,7 +1589,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         for(WalletNode addressNode : purposeNode.getChildren()) {
             OutputGroup outputGroup = null;
             for(BlockTransactionHashIndex utxo : addressNode.getTransactionOutputs(txoFilters)) {
-                if(outputGroup == null || !groupByAddress) {
+                if(outputGroup == null || !groupByAddress || !outputGroup.canAdd()) {
                     outputGroup = new OutputGroup(addressNode.getWallet().getScriptType(), getStoredBlockHeight(), inputWeightUnits, feeRate, longTermFeeRate);
                     outputGroups.add(outputGroup);
                 }
