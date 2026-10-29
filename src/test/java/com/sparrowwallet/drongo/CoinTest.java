@@ -39,6 +39,30 @@ public class CoinTest {
         Coin.set(Coin.LITECOIN);
     }
 
+    /**
+     * Bellscoin mainnet as Bells Core v3 (Nintondo/bellscoinV3 kernel/chainparams.cpp CMainParams): bech32_hrp "bel",
+     * SegwitHeight 144000. bel1 P2WPKH outputs are in live use. Taproot is a separate BIP9 deployment (bit 2,
+     * min_activation_height 188000) whose activation is not verified, so P2TR stays off.
+     */
+    @Test
+    public void bellscoinMainnetHasSegwitButNotTaproot() throws InvalidAddressException {
+        Assertions.assertEquals("bel", Coin.BELLSCOIN.params(Network.MAINNET).bech32AddressHrp());
+        Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2WPKH));
+        Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2SH_P2WPKH));
+        Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2WSH));
+        Assertions.assertFalse(Coin.BELLSCOIN.supports(ScriptType.P2TR));
+        Assertions.assertFalse(Coin.BELLSCOIN.supports(ScriptType.P2A));
+        Assertions.assertTrue(Coin.LITECOIN.supports(ScriptType.P2TR));
+
+        //First P2WPKH address of "abandon x11 about" with Nintondo's passphrase "bells" at m/44'/0'/0'/0/0, computed
+        //outside drongo (plain Python BIP39, BIP32 and BIP173; the same script gives BIP84's bc1qcr8te...).
+        Coin.set(Coin.BELLSCOIN);
+        ECKey key = ECKey.fromPublicOnly(Utils.hexToBytes("02688337c538eb7aaed6dfdd1dc572f30ec288eb833f19c141f9ec82795842da02"));
+        Address address = ScriptType.P2WPKH.getAddress(key);
+        Assertions.assertEquals("bel1qh07eu8daq4xvgefnq567dfrv8dssxm0ruw2q2a", address.toString());
+        Assertions.assertArrayEquals(address.getData(), Address.fromString(address.toString()).getData());
+    }
+
     private static int versionByteOf(Address address) {
         return Byte.toUnsignedInt(Base58.decodeChecked(address.toString())[0]);
     }
@@ -159,7 +183,7 @@ public class CoinTest {
                 ""
         };
 
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
             Coin.set(coin);
             Assertions.assertNull(Network.get().getBech32AddressHRP(), coin + " should have no bech32 HRP");
 
@@ -241,7 +265,13 @@ public class CoinTest {
             Assertions.assertTrue(Coin.LITECOIN.supports(scriptType), "Litecoin should still support " + scriptType);
         }
 
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
+        //Bellscoin has segwit v0 but not (verified) Taproot, so no witness v1 outputs, and no MWEB.
+        for(ScriptType scriptType : ScriptType.ADDRESSABLE_TYPES) {
+            boolean expected = scriptType != ScriptType.P2TR && scriptType != ScriptType.P2A && scriptType != ScriptType.MWEB;
+            Assertions.assertEquals(expected, Coin.BELLSCOIN.supports(scriptType), "Bellscoin support for " + scriptType);
+        }
+
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
             //Legacy types work on every chain.
             Assertions.assertTrue(coin.supports(ScriptType.P2PKH));
             Assertions.assertTrue(coin.supports(ScriptType.P2SH));
@@ -377,10 +407,12 @@ public class CoinTest {
         //Bellscoin is Scrypt but has NOT activated AuxPoW on mainnet, so its headers are plain 80-byte.
         Assertions.assertFalse(Coin.BELLSCOIN.isAuxPow());
 
-        //Only Litecoin has segwit and MWEB; the merge-mined chains never activated segwit.
+        //Only Litecoin has MWEB; Litecoin and Bellscoin have segwit, the merge-mined chains never activated it.
         Assertions.assertTrue(Coin.LITECOIN.isSegwitSupported());
         Assertions.assertTrue(Coin.LITECOIN.isMwebSupported());
-        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.BELLSCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
+        Assertions.assertTrue(Coin.BELLSCOIN.isSegwitSupported());
+        Assertions.assertFalse(Coin.BELLSCOIN.isMwebSupported());
+        for(Coin coin : new Coin[]{Coin.DOGECOIN, Coin.PEPECOIN, Coin.LUCKYCOIN, Coin.DINGOCOIN, Coin.JUNKCOIN}) {
             Assertions.assertFalse(coin.isSegwitSupported(), coin + " must not report segwit support");
             Assertions.assertFalse(coin.isMwebSupported(), coin + " must not report MWEB support");
             Assertions.assertNull(coin.params(Network.MAINNET).bech32AddressHrp(), coin + " must have no bech32 HRP");

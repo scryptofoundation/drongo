@@ -33,8 +33,8 @@ public enum Coin {
     PEPECOIN("pepecoin", "Pepecoin", "PEP", "pepecoin-network", 3434, true, false, false),
     LUCKYCOIN("luckycoin", "Luckycoin", "LKY", "luckycoin", 0, true, false, false),
     //Bellscoin: Dogecoin Core derivative, Scrypt, but AuxPoW is NOT activated on mainnet (legacy blocks),
-    //so its headers are standard 80-byte.
-    BELLSCOIN("bellscoin", "Bellscoin", "BELLS", "bellscoin", 762, false, false, false),
+    //so its headers are standard 80-byte. Segwit since mainnet height 144000 (Bells Core v3).
+    BELLSCOIN("bellscoin", "Bellscoin", "BELLS", "bellscoin", 762, false, true, false),
     //Dingocoin reuses Dogecoin's entire address/key identity (P2PKH 30, WIF 158, dgub/dgpv, coin type 3,
     //and even the same genesis hash). It is a distinct chain only at the network layer (magic c1c1c1c1,
     //ports). The flavor builds made that harmless - one coin per binary, pointed at that coin's own
@@ -121,12 +121,17 @@ public enum Coin {
      * Whether this chain can use the given script type.
      *
      * The witness types need segwit and the MWEB types need MWEB, neither of which the merge-mined
-     * chains have - their addresses would otherwise be encoded against a null HRP. P2PK, P2PKH and
-     * P2SH work everywhere.
+     * chains have - their addresses would otherwise be encoded against a null HRP. P2TR and P2A also
+     * need Taproot, a separate deployment. P2PK, P2PKH and P2SH work everywhere.
      */
     public boolean supports(ScriptType scriptType) {
         if(scriptType == ScriptType.MWEB || scriptType == ScriptType.MWEB_HOGEX || scriptType == ScriptType.MWEB_PEGIN) {
             return mweb;
+        }
+
+        //Witness version 1 outputs (P2TR, and P2A anchors) only mean something on a chain with Taproot rules
+        if(scriptType == ScriptType.P2TR || scriptType == ScriptType.P2A) {
+            return segwit && isTaprootSupported();
         }
 
         if(Arrays.asList(ScriptType.WITNESS_TYPES).contains(scriptType)) {
@@ -197,10 +202,11 @@ public enum Coin {
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 241, 19918);
                 default -> throw unverified(network);
             };
-            //Bellscoin: Nintondo revival (params from the idquantum-dev branch, NOT master which is
-            //unmodified Dogecoin). dgub/dgpv keys, no segwit. P2PKH 25 -> "B", P2SH 30 -> "D".
+            //Bellscoin mainnet as Bells Core v3 (Nintondo/bellscoinV3 kernel/chainparams.cpp CMainParams, genesis
+            //e5be24df... matches api.nintondo.io): P2PKH 25 "B", P2SH 30 "D", WIF 153, dgub/dgpv, bech32 "bel" with
+            //segwit from height 144000. bel1 P2WPKH outputs are in live use (checked 2026-10-28).
             case BELLSCOIN -> switch(network) {
-                case MAINNET -> new ChainParams(25, "B", 30, "D", null, null, null,
+                case MAINNET -> new ChainParams(25, "B", 30, "D", "bel", null, null,
                         ExtendedKey.Header.dgpv, ExtendedKey.Header.dgub, 153, 8332);
                 //Testnet as Bells Core v3, which the live network runs (BellsChain/bellscoin v3.0.0-rc2 @59addbbe
                 //kernel/chainparams.cpp CTestNetParams, chainparamsbase.cpp): P2PKH 33 "E", P2SH 22 "9A", WIF 158,
@@ -443,6 +449,15 @@ public enum Coin {
 
     public boolean isSegwitSupported() {
         return segwit;
+    }
+
+    /**
+     * Taproot is its own deployment, not part of segwit. Litecoin activated it in 2022. Bellscoin's (BIP9 bit 2,
+     * min_activation_height 188000 in Bells Core v3) has not been verified as locked in, and an output to an
+     * inactive Taproot program is anyone-can-spend, so it stays off until it is.
+     */
+    public boolean isTaprootSupported() {
+        return this == LITECOIN;
     }
 
     public boolean isMwebSupported() {
