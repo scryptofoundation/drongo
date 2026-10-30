@@ -6,7 +6,9 @@ public enum WalletModel {
     SEED, SPARROW, BITCOIN_CORE, ELECTRUM, TREZOR_1, TREZOR_T, COLDCARD, LEDGER_NANO_S, LEDGER_NANO_X, DIGITALBITBOX_01, KEEPKEY, SPECTER_DESKTOP, COBO_VAULT,
     BITBOX_02, SPECTER_DIY, PASSPORT, BLUE_WALLET, KEYSTONE, SEEDSIGNER, CARAVAN, GORDIAN_SEED_TOOL, JADE, LEDGER_NANO_S_PLUS, EPS, TAPSIGNER, SATSCARD, LABELS,
     BSMS, KRUX, SATOCHIP, TRANSACTIONS, AIRGAP_VAULT, TREZOR_SAFE_3, SATSCHIP, SAMOURAI, TREZOR_SAFE_5, LEDGER_STAX, LEDGER_FLEX, ONEKEY_CLASSIC_1S, ONEKEY_PRO,
-    KEYCARD_SHELL, KEYCARD, TREZOR_SAFE_7, LEDGER_NANO_GEN5, CUPCAKE, ERA_WALLET;
+    KEYCARD_SHELL, KEYCARD, TREZOR_SAFE_7, LEDGER_NANO_GEN5, CUPCAKE, ERA_WALLET,
+    // keystores persist the ordinal: keep fork additions last, after any upstream model
+    SPARROW_MOBILE;
 
     public static WalletModel getModel(String model) {
         return valueOf(model.toUpperCase(Locale.ROOT));
@@ -65,6 +67,10 @@ public enum WalletModel {
             return "era";
         }
 
+        if(this == SPARROW_MOBILE) {
+            return "sparrow";
+        }
+
         return this.toString().toLowerCase(Locale.ROOT);
     }
 
@@ -78,7 +84,7 @@ public enum WalletModel {
     }
 
     public boolean includeNonWitnessUtxoForQR() {
-        if(this == KRUX) {
+        if(this == KRUX || this == SPARROW_MOBILE) {
             return true;
         } else {
             return false;
