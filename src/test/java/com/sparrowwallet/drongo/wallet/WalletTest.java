@@ -29,7 +29,7 @@ import java.util.TreeSet;
 
 public class WalletTest {
     //An unrelated silent payments wallet to send to
-    private static final String SP_SCAN_ADDRESS = "spscan1qu6d9s9lfd3a99nckpjw7as602lg0950wvcfwg7g4kakhsp32r57qx4853d0ylm42uewydgx6xgz0v20hgthsk2kr84f96jls3q0jywktrv8us5";
+    private static final String SP_SCAN_ADDRESS = "ltcspscan1qu6d9s9lfd3a99nckpjw7as602lg0950wvcfwg7g4kakhsp32r57qx4853d0ylm42uewydgx6xgz0v20hgthsk2kr84f96jls3q0jywktrcr05z";
 
     @Test
     public void encryptTest() throws MnemonicException {
@@ -624,7 +624,7 @@ public class WalletTest {
     @Test
     public void testHdOutputSizeIsUnchanged() throws InsufficientFundsException, InvalidAddressException {
         Wallet wallet = buildSpendingWallet();
-        WalletTransaction walletTransaction = createSpendingTransaction(wallet, new Payment(Address.fromString("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"), "Payment", 100000L, false), 10.0d);
+        WalletTransaction walletTransaction = createSpendingTransaction(wallet, new Payment(Address.fromString("ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9"), "Payment", 100000L, false), 10.0d);
 
         Assertions.assertEquals(walletTransaction.getTransaction().getVirtualSize(), walletTransaction.getVirtualSize(), "A transaction without silent payment outputs needs no adjustment");
         Assertions.assertEquals(10.0d, walletTransaction.getFeeRate(), 0.1d);
@@ -677,7 +677,7 @@ public class WalletTest {
     @Test
     public void testSignatureWithoutSilentPaymentOutputsIsAccepted() throws InsufficientFundsException, InvalidAddressException {
         Wallet wallet = buildSpendingWallet();
-        WalletTransaction walletTransaction = createSpendingTransaction(wallet, new Payment(Address.fromString("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"), "Payment", 100000L, false), 10.0d);
+        WalletTransaction walletTransaction = createSpendingTransaction(wallet, new Payment(Address.fromString("ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9"), "Payment", 100000L, false), 10.0d);
         PSBT psbt = walletTransaction.createPSBT();
 
         psbt.getPsbtInputs().getFirst().getPartialSignatures().put(ECKey.fromPublicOnly(ECKey.fromPrivate(Utils.hexToBytes("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")).getPubKey()),

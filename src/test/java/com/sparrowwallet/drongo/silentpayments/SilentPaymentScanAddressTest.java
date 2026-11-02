@@ -69,7 +69,7 @@ public class SilentPaymentScanAddressTest {
 
         SilentPaymentScanAddress spScanAddress = SilentPaymentScanAddress.from(scanPrivateKey, ECKey.fromPublicOnly(spendPrivateKey));
         String keyString = spScanAddress.toKeyString();
-        Assertions.assertTrue(keyString.startsWith("spscan1q"));
+        Assertions.assertTrue(keyString.startsWith("ltcspscan1q"));
     }
 
     @Test
@@ -109,7 +109,7 @@ public class SilentPaymentScanAddressTest {
 
         SilentPaymentScanAddress original = SilentPaymentScanAddress.from(scanPrivateKey, ECKey.fromPublicOnly(spendPrivateKey));
         String keyString = original.toKeyString();
-        Assertions.assertTrue(keyString.startsWith("tspscan1q"));
+        Assertions.assertTrue(keyString.startsWith("tltcspscan1q"));
 
         SilentPaymentScanAddress decoded = SilentPaymentScanAddress.fromKeyString(keyString);
         Assertions.assertArrayEquals(original.getScanKey().getPrivKeyBytes(), decoded.getScanKey().getPrivKeyBytes());

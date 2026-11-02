@@ -1026,7 +1026,7 @@ public class SilentPaymentUtilsTest {
     }
 
     private static final String VERIFY_TEST_SEED = "absent essay fox snake vast pumpkin height crouch silent bulb excuse razor";
-    private static final String VERIFY_TEST_SP_ADDRESS = "sp1qqgste7k9hx0qftg6qmwlkqtwuy6cycyavzmzj85c6qdfhjdpdjtdgqjuexzk6murw56suy3e0rd2cgqvycxttddwsvgxe2usfpxumr70xc9pkqwv";
+    private static final String VERIFY_TEST_SP_ADDRESS = "ltcsp1qqgste7k9hx0qftg6qmwlkqtwuy6cycyavzmzj85c6qdfhjdpdjtdgqjuexzk6murw56suy3e0rd2cgqvycxttddwsvgxe2usfpxumr70xcm2vdcy";
     private static final long VERIFY_INPUT_VALUE = 100_000L;
     private static final long VERIFY_OUTPUT_VALUE = 50_000L;
 
