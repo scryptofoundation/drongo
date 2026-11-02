@@ -54,11 +54,6 @@ public class CoinTest {
     }
 
     /**
-     * Bellscoin mainnet as Bells Core v3 (Nintondo/bellscoinV3 kernel/chainparams.cpp CMainParams): bech32_hrp "bel",
-     * SegwitHeight 144000. bel1 P2WPKH outputs are in live use. Taproot is a separate BIP9 deployment (bit 2,
-     * min_activation_height 188000) whose activation is not verified, so P2TR stays off.
-     */
-    /**
      * Before a server reports fee estimates the send form starts from the fallback rate. It must never start below the
      * chain's recommended rate, or the first transaction on DINGO, LKY and the like is refused or never mined.
      */
@@ -91,15 +86,22 @@ public class CoinTest {
         Assertions.assertEquals(367d, Coin.BELLSCOIN.getFeeSize(367d));
     }
 
+    /**
+     * Bellscoin mainnet as Bells Core v3 (Nintondo/bellscoinV3 kernel/chainparams.cpp CMainParams): bech32_hrp "bel",
+     * SegwitHeight 144000. bel1 P2WPKH outputs are in live use. Taproot is its own BIP9 deployment (bit 2,
+     * min_activation_height 188000): mainnet blocks signalled it in every period from the window's start and stopped
+     * at height 191520, the first period past the minimum height, which is where it went active.
+     */
     @Test
-    public void bellscoinMainnetHasSegwitButNotTaproot() throws InvalidAddressException {
+    public void bellscoinMainnetHasSegwitAndTaproot() throws InvalidAddressException {
         Assertions.assertEquals("bel", Coin.BELLSCOIN.params(Network.MAINNET).bech32AddressHrp());
         Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2WPKH));
         Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2SH_P2WPKH));
         Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2WSH));
-        Assertions.assertFalse(Coin.BELLSCOIN.supports(ScriptType.P2TR));
-        Assertions.assertFalse(Coin.BELLSCOIN.supports(ScriptType.P2A));
+        Assertions.assertTrue(Coin.BELLSCOIN.isTaprootSupported());
+        Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2TR));
         Assertions.assertTrue(Coin.LITECOIN.supports(ScriptType.P2TR));
+        Assertions.assertFalse(Coin.DOGECOIN.supports(ScriptType.P2TR));
 
         //First P2WPKH address of "abandon x11 about" with Nintondo's passphrase "bells" at m/44'/0'/0'/0/0, computed
         //outside drongo (plain Python BIP39, BIP32 and BIP173; the same script gives BIP84's bc1qcr8te...).
@@ -108,6 +110,12 @@ public class CoinTest {
         Address address = ScriptType.P2WPKH.getAddress(PolicyType.SINGLE_HD, key);
         Assertions.assertEquals("bel1qh07eu8daq4xvgefnq567dfrv8dssxm0ruw2q2a", address.toString());
         Assertions.assertArrayEquals(address.getData(), Address.fromString(address.toString()).getData());
+
+        //The same key as BIP86 key-only Taproot, as Nintondo's p2tr({internalPubkey}) makes it; computed outside drongo
+        //by a script that also gives BIP86's own bc1p5cyxnux... vector
+        Address taproot = ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, key);
+        Assertions.assertEquals("bel1paacjc7szg778dqsx3amwy7t02p8j5hsd9em3gxlq9jl9rl88jf3s53f3ea", taproot.toString());
+        Assertions.assertArrayEquals(taproot.getData(), Address.fromString(taproot.toString()).getData());
     }
 
     private static int versionByteOf(Address address) {
@@ -312,9 +320,9 @@ public class CoinTest {
             Assertions.assertTrue(Coin.LITECOIN.supports(scriptType), "Litecoin should still support " + scriptType);
         }
 
-        //Bellscoin has segwit v0 but not (verified) Taproot, so no witness v1 outputs, and no MWEB.
+        //Bellscoin has segwit and Taproot (active from height 191520), but no MWEB.
         for(ScriptType scriptType : ScriptType.ADDRESSABLE_TYPES) {
-            boolean expected = scriptType != ScriptType.P2TR && scriptType != ScriptType.P2A && scriptType != ScriptType.MWEB;
+            boolean expected = scriptType != ScriptType.MWEB;
             Assertions.assertEquals(expected, Coin.BELLSCOIN.supports(scriptType), "Bellscoin support for " + scriptType);
         }
 

@@ -475,11 +475,12 @@ public enum Coin {
 
     /**
      * Taproot is its own deployment, not part of segwit. Litecoin activated it in 2022. Bellscoin's (BIP9 bit 2,
-     * min_activation_height 188000 in Bells Core v3) has not been verified as locked in, and an output to an
-     * inactive Taproot program is anyone-can-spend, so it stays off until it is.
+     * min_activation_height 188000 in Bells Core v3) is active: mainnet blocks signalled it in every period from
+     * the window's start and stopped at height 191520, the first period past the minimum height. On any other
+     * coin an output to a Taproot program would be anyone-can-spend, so it stays off there.
      */
     public boolean isTaprootSupported() {
-        return this == LITECOIN;
+        return this == LITECOIN || this == BELLSCOIN;
     }
 
     public boolean isMwebSupported() {
