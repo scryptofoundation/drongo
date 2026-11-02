@@ -4,6 +4,7 @@ import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -33,6 +34,7 @@ public class HeaderChainStateTest {
     private static final long MAINNET_FIRST_RISE_BITS = 0x1d00d86aL;
 
     @Test
+    @Disabled("Header verification is Bitcoin only and off for every coin (Network.supportsHeaderVerification); these use Bitcoin genesis, checkpoint and retarget data")
     public void testEveryMainnetRetarget() throws IOException {
         Network.set(Network.MAINNET);
 
@@ -76,6 +78,7 @@ public class HeaderChainStateTest {
     }
 
     @Test
+    @Disabled("Header verification is Bitcoin only and off for every coin (Network.supportsHeaderVerification); these use Bitcoin genesis, checkpoint and retarget data")
     public void testRetargetClampedAtProofOfWorkLimit() {
         Network.set(Network.MAINNET);
 

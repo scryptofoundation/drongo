@@ -14,12 +14,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 public class BitcoinUriTest {
-    private static final String ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
-    private static final String SP_ADDRESS = "sp1qqgste7k9hx0qftg6qmwlkqtwuy6cycyavzmzj85c6qdfhjdpdjtdgqjuexzk6murw56suy3e0rd2cgqvycxttddwsvgxe2usfpxumr70xc9pkqwv";
+    private static final String ADDRESS = "ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9";
+    private static final String SP_ADDRESS = "ltcsp1qqgste7k9hx0qftg6qmwlkqtwuy6cycyavzmzj85c6qdfhjdpdjtdgqjuexzk6murw56suy3e0rd2cgqvycxttddwsvgxe2usfpxumr70xcm2vdcy";
 
     @Test
     public void fallbackAddressIsPreferredOnlyWhereSilentPaymentsCannotBeSent() throws BitcoinURIParseException {
-        BitcoinURI bitcoinURI = new BitcoinURI("bitcoin:" + ADDRESS + "?sp=" + SP_ADDRESS);
+        BitcoinURI bitcoinURI = new BitcoinURI("litecoin:" + ADDRESS + "?" + BitcoinURI.getSilentPaymentsAddressField() + "=" + SP_ADDRESS);
         Assertions.assertNotNull(bitcoinURI.getAddress());
         Assertions.assertNotNull(bitcoinURI.getSilentPaymentAddress());
 
@@ -38,7 +38,7 @@ public class BitcoinUriTest {
 
     @Test
     public void silentPaymentAddressIsTakenWithoutAFallback() throws BitcoinURIParseException {
-        BitcoinURI bitcoinURI = new BitcoinURI("bitcoin:?sp=" + SP_ADDRESS);
+        BitcoinURI bitcoinURI = new BitcoinURI("litecoin:?" + BitcoinURI.getSilentPaymentsAddressField() + "=" + SP_ADDRESS);
         Assertions.assertNull(bitcoinURI.getAddress());
 
         //With nothing to fall back to, a wallet that cannot send silent payments is still given the silent payment address to refuse
@@ -121,10 +121,10 @@ public class BitcoinUriTest {
     }
 
     private static BitcoinURI amountUri(String amount) throws BitcoinURIParseException {
-        return new BitcoinURI("bitcoin:" + ADDRESS + "?amount=" + amount);
+        return new BitcoinURI("litecoin:" + ADDRESS + "?amount=" + amount);
     }
 
     private static BitcoinURI payjoinUri(String payjoinUrl) throws BitcoinURIParseException {
-        return new BitcoinURI("bitcoin:" + ADDRESS + "?pj=" + URLEncoder.encode(payjoinUrl, StandardCharsets.UTF_8));
+        return new BitcoinURI("litecoin:" + ADDRESS + "?pj=" + URLEncoder.encode(payjoinUrl, StandardCharsets.UTF_8));
     }
 }

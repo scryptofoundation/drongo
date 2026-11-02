@@ -15,7 +15,9 @@ public class BlockTransactionHashTest {
 
     @Test
     public void confirmationsBelowTip() {
-        Assertions.assertEquals(0, new BlockTransaction(Sha256Hash.ZERO_HASH, 211, null, null, null).getConfirmations(210));
-        Assertions.assertEquals(0, new BlockTransaction(Sha256Hash.ZERO_HASH, 211, null, null, null).getConfirmations(203));
+        //Upstream clamps a transaction above the tip to 0. Litecoin keeps it at 1 (50c2244, "Fix mempool balance"), so a confirmed
+        //transaction reported ahead of the tip the wallet has seen is not counted in the mempool balance
+        Assertions.assertEquals(1, new BlockTransaction(Sha256Hash.ZERO_HASH, 211, null, null, null).getConfirmations(210));
+        Assertions.assertEquals(1, new BlockTransaction(Sha256Hash.ZERO_HASH, 211, null, null, null).getConfirmations(203));
     }
 }

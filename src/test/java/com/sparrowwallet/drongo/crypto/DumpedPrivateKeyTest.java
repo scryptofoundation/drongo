@@ -5,8 +5,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 public class DumpedPrivateKeyTest {
-    private static final String COMPRESSED_WIF = "L44B5gGEpqEDRS9vVPz7QT35jcBG2r3CZwSwQ4fCewXAhAhqGVpP";
-    private static final String UNCOMPRESSED_WIF = "5KN7MzqK5wt2TP1fQCYyHBtDrXdJuXbUzm4A9rKAteGu3Qi5CVR";
+    //The BIP38 vectors' keys (L44B5gGE..., 5KN7MzqK...) under Litecoin's WIF byte 0xb0
+    private static final String COMPRESSED_WIF = "T9tSXRZREDCpCGno32vycoaTgTpa6w46P9MCFsHkDuhLD4FVuQVZ";
+    private static final String UNCOMPRESSED_WIF = "6vfqq8NqzNLtvkuWv2Lw4afPp1Bn7L3WmSTKs3LCc6bWjDkycfE";
 
     @Test
     public void testCompressedRoundTrip() {

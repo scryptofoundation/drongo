@@ -551,10 +551,10 @@ public class OutputDescriptorTest {
         String p2shP2wsh = "sh(wsh(sortedmulti(2,[793cc70b/48'/0'/0'/1']xpub6ErVmcYYHmavsMgxEcTZyzN5sqth1ZyRpFNJC26ij1wYGC2SBKYrgt9yariSbn7HLRoZUvhUhmPfsRTPrdhhGFscpPZzmch6UTdmRP1aZUj/0/0,[b3118e52/48'/0'/0'/1']xpub6Du5Jn6eYZE96ccmAc1ZTFPzdnzrvqfG4mpamDun2qZYKywoiQJMCbS3kWWMr6U3XW6s125RLsaPABWgv2yA749ieaMe67FxkTjMsbcxCch/0/0,[842bd2ed/48'/0'/0'/1']xpub6Ex81KopPkEt9hJiWHabYy8LNsSR4A7sUQoFBk9dR8XxHrr4p9HrYWN3NCf5uwfopHnQkCG7FYnZMztKbtRtbh6tzZC4xtHPbmVVxRSN7ic/0/0)))";
 
         OutputDescriptor p2wshDescriptor = OutputDescriptor.getOutputDescriptor(p2wsh);
-        Assertions.assertEquals("bc1qrgc6p3kylfztu06ysl752gwwuekhvtfh9vr7zg43jvu60mutamcsv948ej", p2wshDescriptor.getAddress(p2wshDescriptor.getChildDerivation()).toString());
+        Assertions.assertEquals("ltc1qrgc6p3kylfztu06ysl752gwwuekhvtfh9vr7zg43jvu60mutamcs0pmhrh", p2wshDescriptor.getAddress(p2wshDescriptor.getChildDerivation()).toString());
 
         OutputDescriptor p2shP2wshDescriptor = OutputDescriptor.getOutputDescriptor(p2shP2wsh);
-        Assertions.assertEquals("3MmNkJ3e67jDGNwGL7yQ886T192Bbb81zP", p2shP2wshDescriptor.getAddress(p2shP2wshDescriptor.getChildDerivation()).toString());
+        Assertions.assertEquals("MTyX4BTc3Eae4tDARzxjwmLrKqcdY3qcEA", p2shP2wshDescriptor.getAddress(p2shP2wshDescriptor.getChildDerivation()).toString());
 
         //A fixed /0/0 descriptor must describe the same address as the equivalent template at receive index 0
         OutputDescriptor template = OutputDescriptor.getOutputDescriptor(p2shP2wsh.replace("/0/0", "/**"));

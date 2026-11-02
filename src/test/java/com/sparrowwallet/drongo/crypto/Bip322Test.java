@@ -63,7 +63,7 @@ public class Bip322Test {
 
     @Test
     public void verifyMessageBip322RejectsFullVariant() throws InvalidAddressException {
-        Address address = Address.fromString("bc1q9vza2e8x573nczrlzms0wvx3gsqjx7vavgkx0l");
+        Address address = Address.fromString("ltc1q9vza2e8x573nczrlzms0wvx3gsqjx7vag5vzh0");
         String fullSignature = "fulAkcwRAIgM2gBAQqvZX15ZiysmKmQpDrG83avLIT492QBzLnQIxYCIBaTpOaD20qRlEylyxFSeEA2ba9YOixpX8z46TSDtS40ASECx/EgAxlkQpQ9hYjgGu6EBCPMVPwVIVJqO4XCsMvViHI=";
         Assertions.assertThrows(SignatureException.class, () -> Bip322.verifyMessageBip322(ScriptType.P2WPKH, address, "", fullSignature));
 
@@ -132,7 +132,7 @@ public class Bip322Test {
 
     @Test
     public void getBip322PsbtMessageRoundTrip() throws com.sparrowwallet.drongo.psbt.PSBTParseException {
-        ECKey privKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey privKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         Address address = ScriptType.P2WPKH.getAddress(PolicyType.SINGLE_HD, privKey);
 
         String message = "UTF-8 support: öäüéàè 测试文本 😄";
@@ -195,7 +195,7 @@ public class Bip322Test {
 
     @Test
     public void signMessageBip322Sp() throws SignatureException {
-        ECKey spendPrivKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey spendPrivKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         byte[] tweak = Utils.hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
 
         ECKey spendPubKey = ECKey.fromPublicOnly(spendPrivKey);
@@ -218,7 +218,7 @@ public class Bip322Test {
 
     @Test
     public void getBip322PsbtSp() {
-        ECKey spendPrivKey = DumpedPrivateKey.fromBase58("L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k").getKey();
+        ECKey spendPrivKey = DumpedPrivateKey.fromBase58("T9KX5zCugGdXizZsfv9st3xy98jRF53XdQt2WDrZ1mZUcQxUSprs").getKey();
         byte[] tweak = Utils.hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
 
         ECKey spendPubKey = ECKey.fromPublicOnly(spendPrivKey);

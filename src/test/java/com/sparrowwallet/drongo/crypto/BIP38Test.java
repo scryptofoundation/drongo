@@ -60,8 +60,8 @@ public class BIP38Test {
     public void testCompressionFlagEC() throws GeneralSecurityException, UnsupportedEncodingException {
         //BIP38 provides no EC multiply vector with the compression flag set. Both of these were generated from the same passphrase, owner salt and seedb,
         //differing only in the flag byte - the uncompressed one is included because it can be checked against the vectors above.
-        Assertions.assertEquals("5KQQSnRzBAXc5eehc6Q1mQGxghSFLS1H1pChoqP4LtPoKrkWzkz", BIP38.decrypt("TestingOneTwoThree", "6PfT3aPZr59YLHDHVz6yem2FuvXsUdDEPNYw7ArG11BFdpG31SqC9f9eUn").toString());
-        Assertions.assertEquals("L4EJUoXHMs45qXBQDtpaNyjSnDUSGmNDgbLf7iYMkmqdUDybFMfN", BIP38.decrypt("TestingOneTwoThree", "6PnRe5H6XHsMpnJyHtJNKQ8MtGBQhTwNqQpdHKwKLYWsZogTGQ1SiL39A7").toString());
+        assertDecryptsTo("TestingOneTwoThree", "6PfT3aPZr59YLHDHVz6yem2FuvXsUdDEPNYw7ArG11BFdpG31SqC9f9eUn", "5KQQSnRzBAXc5eehc6Q1mQGxghSFLS1H1pChoqP4LtPoKrkWzkz");
+        assertDecryptsTo("TestingOneTwoThree", "6PnRe5H6XHsMpnJyHtJNKQ8MtGBQhTwNqQpdHKwKLYWsZogTGQ1SiL39A7", "L4EJUoXHMs45qXBQDtpaNyjSnDUSGmNDgbLf7iYMkmqdUDybFMfN");
     }
 
     @Test
