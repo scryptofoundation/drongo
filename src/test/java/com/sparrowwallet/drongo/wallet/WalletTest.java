@@ -702,6 +702,18 @@ public class WalletTest {
         return wallet;
     }
 
+    @Test
+    public void testWalletPsbtCarriesItsCoinThroughEveryExport() throws Exception {
+        Wallet wallet = buildSpendingWallet();
+        WalletTransaction walletTransaction = createSpendingTransaction(wallet, new Payment(Address.fromString("ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9"), "Payment", 100000L, false), 10.0d);
+        PSBT psbt = walletTransaction.createPSBT();
+        Assertions.assertEquals(wallet.getCoin(), psbt.getCoin());
+
+        //Exports without xpubs and the public copy drop other proprietary data, but the phone needs the coin to sign
+        Assertions.assertEquals(wallet.getCoin(), new PSBT(psbt.serialize(false, true)).getCoin());
+        Assertions.assertEquals(wallet.getCoin(), psbt.getPublicCopy().getCoin());
+    }
+
     private Wallet buildSpendingWallet() {
         Wallet wallet = new Wallet();
         wallet.setPolicyType(PolicyType.SINGLE_HD);

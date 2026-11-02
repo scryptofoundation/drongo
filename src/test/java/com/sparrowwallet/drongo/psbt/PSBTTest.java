@@ -58,6 +58,22 @@ public class PSBTTest {
     private static final Long MULTISIG_UTXO_VALUE = 100_000L;
 
 
+    /** The phone reads the same key bytes (Psbt.COIN_MARK_KEY): proprietary type fc, identifier "sparrow-scrypt", subtype 0. */
+    @Test
+    public void coinMarkKeyAndValue() throws PSBTParseException {
+        Transaction transaction = new Transaction();
+        transaction.addInput(Sha256Hash.ZERO_HASH, 0, new Script(new byte[0]));
+        transaction.addOutput(1000L, new Script(Utils.hexToBytes("0014" + "11".repeat(20))));
+        PSBT psbt = new PSBT(transaction);
+        Assertions.assertNull(psbt.getCoin());
+
+        psbt.setCoin(com.sparrowwallet.drongo.Coin.LUCKYCOIN);
+        String entry = "11" + "fc0e" + Utils.bytesToHex("sparrow-scrypt".getBytes(java.nio.charset.StandardCharsets.US_ASCII)) + "00"
+                + "09" + Utils.bytesToHex("luckycoin".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        Assertions.assertTrue(Utils.bytesToHex(psbt.serialize()).contains(entry));
+        Assertions.assertEquals(com.sparrowwallet.drongo.Coin.LUCKYCOIN, new PSBT(psbt.serialize()).getCoin());
+    }
+
     @Test
     public void invalidNotPSBT() throws PSBTParseException {
         String psbt = "AgAAAAEmgXE3Ht/yhek3re6ks3t4AAwFZsuzrWRkFxPKQhcb9gAAAABqRzBEAiBwsiRRI+a/R01gxbUMBD1MaRpdJDXwmjSnZiqdwlF5CgIgATKcqdrPKAvfMHQOwDkEIkIsgctFg5RXrrdvwS7dlbMBIQJlfRGNM1e44PTCzUbbezn22cONmnCry5st5dyNv+TOMf7///8C09/1BQAAAAAZdqkU0MWZA8W6woaHYOkP1SGkZlqnZSCIrADh9QUAAAAAF6kUNUXm4zuDLEcFDyTT7rk8nAOUi8eHsy4TAA==";

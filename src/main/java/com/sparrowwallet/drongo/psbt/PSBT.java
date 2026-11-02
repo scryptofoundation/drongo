@@ -61,6 +61,13 @@ public class PSBT {
     private String genericSignedMessage = null;
     private final Map<String, String> globalProprietary = new LinkedHashMap<>();
 
+    /**
+     * Key data (after the proprietary type byte) of the global entry naming the coin a PSBT spends: identifier
+     * "sparrow-scrypt", subtype 0; the value is the coin's name. Luckycoin and Junkcoin keys sit on Bitcoin's path, so
+     * nothing else tells a signer their spends from a Bitcoin one. The phone reads the same key (Psbt.COIN_MARK_KEY).
+     */
+    public static final String COIN_MARK_KEY = "0e" + Utils.bytesToHex("sparrow-scrypt".getBytes(StandardCharsets.US_ASCII)) + "00";
+
     //PSBTv0-only fields
     private Transaction transaction = null;
 
@@ -145,6 +152,8 @@ public class PSBT {
             transaction.swapOutputs(i, j);
             Collections.swap(walletTransactionOutputs, i, j);
         }
+
+        setCoin(wallet.getCoin());
 
         if(includeGlobalXpubs && wallet.getPolicyType() != PolicyType.SINGLE_SP) {
             for(Keystore keystore : wallet.getKeystores()) {
@@ -1109,7 +1118,7 @@ public class PSBT {
 
         List<PSBTEntry> globalEntries = getGlobalEntries();
         for(PSBTEntry entry : globalEntries) {
-            if(includeXpubs || (entry.getKeyType() != PSBT_GLOBAL_BIP32_PUBKEY && entry.getKeyType() != PSBT_GLOBAL_PROPRIETARY)) {
+            if(includeXpubs || (entry.getKeyType() != PSBT_GLOBAL_BIP32_PUBKEY && entry.getKeyType() != PSBT_GLOBAL_PROPRIETARY) || isCoinMark(entry)) {
                 entry.serializeToStream(baos);
             }
         }
@@ -1385,10 +1394,15 @@ public class PSBT {
         }
     }
 
+    /** The coin mark is kept even where other proprietary data is dropped: it says nothing about the wallet beyond its coin. */
+    private static boolean isCoinMark(PSBTEntry entry) {
+        return entry.getKeyType() == PSBT_GLOBAL_PROPRIETARY && entry.getKeyData() != null && Utils.bytesToHex(entry.getKeyData()).equals(COIN_MARK_KEY);
+    }
+
     public PSBT getPublicCopy() {
         PSBT publicCopy = this.copy();
         publicCopy.extendedPublicKeys.clear();
-        publicCopy.globalProprietary.clear();
+        publicCopy.globalProprietary.keySet().removeIf(key -> !key.equals(COIN_MARK_KEY));
         publicCopy.silentPaymentsEcdhShares.clear();
         publicCopy.silentPaymentsDLEQProofs.clear();
         for(PSBTInput psbtInput : publicCopy.getPsbtInputs()) {
@@ -1645,6 +1659,20 @@ public class PSBT {
 
     public Map<ECKey, SilentPaymentsDLEQProof> getSilentPaymentsDLEQProofs() {
         return silentPaymentsDLEQProofs;
+    }
+
+    /** The coin this PSBT was marked with ({@link #COIN_MARK_KEY}), or null when it has no mark or names an unknown coin. */
+    public com.sparrowwallet.drongo.Coin getCoin() {
+        String value = globalProprietary.get(COIN_MARK_KEY);
+        if(value == null) {
+            return null;
+        }
+        String name = new String(Utils.hexToBytes(value), StandardCharsets.UTF_8);
+        return Arrays.stream(com.sparrowwallet.drongo.Coin.values()).filter(coin -> coin.getName().equals(name)).findFirst().orElse(null);
+    }
+
+    public void setCoin(com.sparrowwallet.drongo.Coin coin) {
+        globalProprietary.put(COIN_MARK_KEY, Utils.bytesToHex(coin.getName().getBytes(StandardCharsets.UTF_8)));
     }
 
     public Map<String, String> getGlobalProprietary() {
