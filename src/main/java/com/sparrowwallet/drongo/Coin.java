@@ -108,7 +108,9 @@ public enum Coin {
             //Luckycoin's and Dingocoin's are dead; Bellscoin's (Bells Core v3 params) has stalled. They are
             //offered for testing against your own node (a private chain mined from the testnet genesis) with an
             //Electrum server in front of it, set as the coin's server in test mode.
-            case JUNKCOIN, PEPECOIN, DOGECOIN, LUCKYCOIN, BELLSCOIN, DINGOCOIN -> network == Network.MAINNET || network == Network.TESTNET;
+            case JUNKCOIN, PEPECOIN, DOGECOIN, LUCKYCOIN, DINGOCOIN -> network == Network.MAINNET || network == Network.TESTNET;
+            //Bellscoin also on regtest, where Taproot is always active (its testnet window closed on 2024-12-25)
+            case BELLSCOIN -> network == Network.MAINNET || network == Network.TESTNET || network == Network.REGTEST;
         };
     }
 
@@ -214,6 +216,10 @@ public enum Coin {
                 //here (as for Junkcoin), so testnet keys use tpub/tprv; addresses do not depend on the key prefix.
                 case TESTNET -> new ChainParams(33, "E", 22, "9A", "tbel", null, null, null, null,
                         ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 158, 18332);
+                //Regtest as Bells Core v3 (kernel/chainparams.cpp CRegTestParams, genesis f97be01b..., chainparamsbase.cpp):
+                //P2PKH 111 "mn", P2SH 196 "2", WIF 239, tpub/tprv, bech32 "bcrt", RPC 18443. Taproot is always active.
+                case REGTEST -> new ChainParams(111, "mn", 196, "2", "bcrt", null, null, null, null,
+                        ExtendedKey.Header.tprv, ExtendedKey.Header.tpub, 239, 18443);
                 default -> throw unverified(network);
             };
             //Dingocoin: address/key identity identical to Dogecoin (P2PKH 30 "D", P2SH 22 "9A", WIF 158,

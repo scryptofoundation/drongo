@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo;
 
+import com.sparrowwallet.drongo.ExtendedKey;
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.address.InvalidAddressException;
 import com.sparrowwallet.drongo.address.P2PKHAddress;
@@ -116,6 +117,34 @@ public class CoinTest {
         Address taproot = ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, key);
         Assertions.assertEquals("bel1paacjc7szg778dqsx3amwy7t02p8j5hsd9em3gxlq9jl9rl88jf3s53f3ea", taproot.toString());
         Assertions.assertArrayEquals(taproot.getData(), Address.fromString(taproot.toString()).getData());
+    }
+
+    /**
+     * Bellscoin regtest as Bells Core v3 (kernel/chainparams.cpp CRegTestParams, chainparamsbase.cpp): P2PKH 111,
+     * P2SH 196, WIF 239, tpub/tprv, bech32 "bcrt", RPC 18443, and Taproot always active, so a private regtest chain is
+     * where Bellscoin Taproot spends can be tested (the testnet window closed on 2024-12-25).
+     */
+    @Test
+    public void bellscoinRegtestMatchesBellsCore() {
+        Assertions.assertTrue(Coin.BELLSCOIN.supports(Network.REGTEST));
+        Coin.ChainParams params = Coin.BELLSCOIN.params(Network.REGTEST);
+        Assertions.assertEquals(111, params.p2pkhAddressHeader());
+        Assertions.assertEquals(196, params.p2shAddressHeader());
+        Assertions.assertEquals("bcrt", params.bech32AddressHrp());
+        Assertions.assertEquals(239, params.dumpedPrivateKeyHeader());
+        Assertions.assertEquals(18443, params.defaultPort());
+        Assertions.assertEquals(ExtendedKey.Header.tpub, params.xpubHeader());
+
+        Network previous = Network.get();
+        Network.set(Network.REGTEST);
+        try {
+            Coin.set(Coin.BELLSCOIN);
+            ECKey key = ECKey.fromPublicOnly(Utils.hexToBytes("02688337c538eb7aaed6dfdd1dc572f30ec288eb833f19c141f9ec82795842da02"));
+            Assertions.assertTrue(ScriptType.P2TR.getAddress(PolicyType.SINGLE_HD, key).toString().startsWith("bcrt1p"));
+            Assertions.assertTrue(ScriptType.P2PKH.getAddress(PolicyType.SINGLE_HD, key).toString().matches("[mn].*"));
+        } finally {
+            Network.set(previous);
+        }
     }
 
     private static int versionByteOf(Address address) {
