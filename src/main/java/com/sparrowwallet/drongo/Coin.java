@@ -558,6 +558,11 @@ public enum Coin {
         return currentCoin;
     }
 
+    /** The coin this thread is scoped to, or null outside a beginScope bracket. Unlike get(), it never falls back or throws. */
+    public static Coin getScoped() {
+        return threadCoin.get();
+    }
+
     /**
      * The process-wide active coin (the focused wallet tab's coin), ignoring any thread scope.
      * Callers deciding whether focus has moved to a different coin must use this rather than
