@@ -455,6 +455,39 @@ public enum Coin {
     }
 
     /**
+     * The value in satoshis below which an output will not relay at all (the chain's DEFAULT_HARD_DUST_LIMIT), or 0
+     * where no flat hard limit is modelled.
+     *
+     * Dogecoin: dogecoin/dogecoin v1.14.9 src/policy/policy.h:81, DEFAULT_HARD_DUST_LIMIT = DEFAULT_DUST_LIMIT / 10, enforced
+     * by IsStandardTx at src/policy/policy.cpp:109. Pepecoin: pepecoinppc/pepecoin v1.1.0 src/policy/policy.h:81, same.
+     * Junkcoin (Junkcoin-Foundation/junkcoin-core v4.0.3.1) and Bellscoin (BellsChain/bellscoin v3.1.1-rc2) judge dust by
+     * the Bitcoin fee-rate rule (src/policy/policy.cpp IsDust, DUST_RELAY_TX_FEE at policy.h:52 and policy.h:55) with no
+     * flat hard limit, so they stay 0 here. Luckycoin and Dingocoin are unverified and stay 0.
+     */
+    public long getHardDustLimit() {
+        return switch(this) {
+            case DOGECOIN, PEPECOIN -> 100000L;
+            case LITECOIN, DINGOCOIN, BELLSCOIN, JUNKCOIN, LUCKYCOIN -> 0L;
+        };
+    }
+
+    /**
+     * The extra fee in satoshis the chain's own wallet adds for each output below the soft limit (getDustLimit), without
+     * which such a transaction does not relay.
+     *
+     * Dogecoin: dogecoin/dogecoin v1.14.9 src/dogecoin-fees.cpp:103-104, GetDogecoinDustFee adds the soft dust limit
+     * (nDustLimit, 1,000,000 from policy.h:70, DEFAULT_DUST_LIMIT = RECOMMENDED_MIN_TX_FEE = COIN / 100 at policy.h:23)
+     * for every output under it. Pepecoin: pepecoinppc/pepecoin v1.1.0 src/pepecoin-fees.cpp:103-104, same.
+     * UNVERIFIED, so 0: Junkcoin (junkcoin-fees.cpp:92-104 derives its amount from minRelayTxFee, not a flat constant),
+     * Bellscoin (no soft dust fee found in its source), Luckycoin and Dingocoin.
+     */
+    public long getSoftDustSurcharge() {
+        return switch(this) {
+            case DOGECOIN, PEPECOIN -> 1000000L;
+            case LITECOIN, DINGOCOIN, BELLSCOIN, JUNKCOIN, LUCKYCOIN -> 0L;
+        };
+    }
+    /**
      * Confirmations a coinbase output needs before it can be spent, judged by the height of the block that mined it.
      * From each chain's chainparams (nCoinbaseMaturity, with Dogecoin's switch to 240 at its Digishield height 145000);
      * coins not verified yet keep Bitcoin's and Litecoin's 100.

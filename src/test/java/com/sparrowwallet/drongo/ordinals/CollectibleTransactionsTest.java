@@ -45,7 +45,30 @@ public class CollectibleTransactionsTest {
 
     @AfterEach
     public void tearDown() {
+        if(dogeScope != null) {
+            Coin.endScope(dogeScope);
+        }
         Coin.endScope(previousCoin);
+    }
+
+    private Coin dogeScope;
+
+    /** Replaces the Litecoin taproot wallet with a Dogecoin P2PKH one, for the per-coin postage tests. */
+    private void useDogecoin() throws Exception {
+        dogeScope = Coin.beginScope(Coin.DOGECOIN);
+        DeterministicSeed seed = new DeterministicSeed(new ArrayList<>(WORDS), "", 0, DeterministicSeed.Type.BIP39);
+        wallet = new Wallet("doge");
+        wallet.setPolicyType(PolicyType.SINGLE_HD);
+        wallet.setScriptType(ScriptType.P2PKH);
+        Keystore keystore = Keystore.fromSeed(seed, PolicyType.SINGLE_HD, ScriptType.P2PKH.getDefaultDerivation());
+        wallet.getKeystores().add(keystore);
+        wallet.setDefaultPolicy(Policy.getPolicy(PolicyType.SINGLE_HD, ScriptType.P2PKH, wallet.getKeystores(), 1));
+        WalletNode receive = wallet.getNode(KeyPurpose.RECEIVE);
+        receive.fillToIndex(10);
+        wallet.getNode(KeyPurpose.CHANGE).fillToIndex(10);
+        nodes.clear();
+        nodes.addAll(receive.getChildren());
+        recipient = ScriptType.P2PKH.getAddress(PolicyType.SINGLE_HD, ECKey.fromPrivate(BigInteger.valueOf(42)));
     }
 
     /** A confirmed transaction paying each value to a receive node in turn, registered with the wallet. */
@@ -77,6 +100,82 @@ public class CollectibleTransactionsTest {
         Assertions.assertEquals(recipient.getOutputScript(), tx.getOutputs().get(0).getScript());
     }
 
+    @Test
+    public void postagePerCoin() {
+        Assertions.assertEquals(10_000, CollectibleTransactions.postage(Coin.LITECOIN, ScriptType.P2TR));
+        Assertions.assertEquals(1_000, CollectibleTransactions.postage(Coin.BELLSCOIN, ScriptType.P2TR));
+        Assertions.assertEquals(100_000, CollectibleTransactions.postage(Coin.BELLSCOIN, ScriptType.P2WPKH));
+        Assertions.assertEquals(100_000, CollectibleTransactions.postage(Coin.DOGECOIN, ScriptType.P2PKH));
+        Assertions.assertEquals(100_000, CollectibleTransactions.postage(Coin.JUNKCOIN, ScriptType.P2PKH));
+    }
+
+    @Test
+    public void offsetZeroSendsWholeOutput() throws Exception {
+        useDogecoin();
+        List<CollectibleTransactions.Pinned> utxos = fund(100_000, 5_000_000);
+        Transaction tx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), 0, 1, recipient, utxos.subList(1, 2), 2.0, 1.0).getTransaction();
+        Assertions.assertEquals(100_000, tx.getOutputs().get(0).getValue());
+        Assertions.assertEquals(utxos.get(0).utxo().getHash(), tx.getInputs().get(0).getOutpoint().getHash());
+        Assertions.assertEquals(0, tx.getInputs().get(0).getOutpoint().getIndex());
+    }
+
+    @Test
+    public void splitAtOffset() throws Exception {
+        useDogecoin();
+        List<CollectibleTransactions.Pinned> utxos = fund(5_000_000, 1_000_000);
+        WalletTransaction wtx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), 300_000, 1, recipient, utxos.subList(1, 2), 2.0, 1.0);
+        Transaction tx = wtx.getTransaction();
+        Assertions.assertEquals(400_000, tx.getOutputs().get(0).getValue());
+        Assertions.assertEquals(recipient.getOutputScript(), tx.getOutputs().get(0).getScript());
+        //The 4,600,000 left over covers the fee and the soft dust surcharge, so the fee candidate stays unspent
+        Assertions.assertEquals(1, tx.getInputs().size());
+        Assertions.assertEquals(0, tx.getInputs().get(0).getOutpoint().getIndex());
+        Assertions.assertEquals(2, tx.getOutputs().size());
+        Assertions.assertInstanceOf(WalletTransaction.ChangeOutput.class, wtx.getOutputs().get(1));
+        Assertions.assertEquals(4_600_000 - wtx.getFee(), tx.getOutputs().get(1).getValue());
+    }
+
+    @Test
+    public void noSplitWithSeveralInscriptions() throws Exception {
+        useDogecoin();
+        List<CollectibleTransactions.Pinned> utxos = fund(5_000_000, 1_000_000);
+        Transaction tx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), 300_000, 2, recipient, utxos.subList(1, 2), 2.0, 1.0).getTransaction();
+        Assertions.assertEquals(5_000_000, tx.getOutputs().get(0).getValue());
+    }
+
+    @Test
+    public void litecoinSixArgUnchanged() throws Exception {
+        List<CollectibleTransactions.Pinned> utxos = fund(10_000, 100_000, 50_000);
+        Transaction six = CollectibleTransactions.sendInscription(wallet, utxos.get(0), recipient, utxos.subList(1, 3), 2.0, 1.0).getTransaction();
+        Transaction eight = CollectibleTransactions.sendInscription(wallet, utxos.get(0), 0, 1, recipient, utxos.subList(1, 3), 2.0, 1.0).getTransaction();
+        Assertions.assertEquals(10_000, six.getOutputs().get(0).getValue());
+        Assertions.assertEquals(2, six.getOutputs().size());
+        Assertions.assertEquals(Utils.bytesToHex(eight.bitcoinSerialize()), Utils.bytesToHex(six.bitcoinSerialize()));
+    }
+    @Test
+    public void dogeSendPaysSoftDustSurcharge() throws Exception {
+        useDogecoin();
+        List<CollectibleTransactions.Pinned> utxos = fund(100_000, 5_000_000);
+        WalletTransaction wtx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), 0, 1, recipient, utxos.subList(1, 2), 2.0, 1.0);
+        long sizeFee = (long)Math.ceil(wtx.getTransaction().getVirtualSize() * 2.0);
+        Assertions.assertTrue(wtx.getFee() >= sizeFee + Coin.DOGECOIN.getSoftDustSurcharge(), "fee " + wtx.getFee() + " vs size fee " + sizeFee);
+        Assertions.assertEquals(1_000_000, Coin.DOGECOIN.getSoftDustSurcharge());
+    }
+
+    @Test
+    public void belowHardDustRefused() throws Exception {
+        useDogecoin();
+        List<CollectibleTransactions.Pinned> utxos = fund(99_999, 5_000_000);
+        Assertions.assertThrows(IllegalArgumentException.class, () -> CollectibleTransactions.sendInscription(wallet, utxos.get(0), 0, 1, recipient, utxos.subList(1, 2), 2.0, 1.0));
+    }
+
+    @Test
+    public void litecoinNoSurcharge() throws Exception {
+        List<CollectibleTransactions.Pinned> utxos = fund(10_000, 100_000);
+        WalletTransaction wtx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), 0, 1, recipient, utxos.subList(1, 2), 2.0, 1.0);
+        Assertions.assertEquals(0, Coin.LITECOIN.getSoftDustSurcharge());
+        Assertions.assertEquals((long)Math.ceil(wtx.getTransaction().getVirtualSize() * 2.0), wtx.getFee());
+    }
     @Test
     public void mintRuneOutputs() throws Exception {
         List<CollectibleTransactions.Pinned> utxos = fund(100_000);

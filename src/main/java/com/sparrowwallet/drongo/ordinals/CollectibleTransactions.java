@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.ordinals;
 
+import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.KeyPurpose;
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.protocol.*;
@@ -28,11 +29,46 @@ public final class CollectibleTransactions {
     /** A wallet output to spend, with the node that holds its key. */
     public record Pinned(BlockTransactionHashIndex utxo, WalletNode node) {}
 
+    /**
+     * The value of the output that carries an inscription to a recipient of the given type: enough to relay, per chain.
+     * Litecoin keeps POSTAGE. Bellscoin sends a taproot recipient 1,000, anything else 100,000. The other chains use 100,000.
+     */
+    public static long postage(Coin coin, ScriptType recipientType) {
+        return switch(coin) {
+            case LITECOIN -> POSTAGE;
+            case BELLSCOIN -> recipientType == ScriptType.P2TR ? 1_000 : 100_000;
+            default -> 100_000;
+        };
+    }
+
     public static WalletTransaction sendInscription(Wallet wallet, Pinned inscribed, Address recipient, List<Pinned> feeCandidates,
                                                     double feeRate, double minRelayFeeRate) throws InsufficientFundsException {
+        return sendInscription(wallet, inscribed, 0, 1, recipient, feeCandidates, feeRate, minRelayFeeRate);
+    }
+
+    /**
+     * Sends the inscription on an output. With the inscription at a positive offset, alone on its output, output 0 is cut
+     * to offset plus the coin's postage so the sats before it stay in the wallet (they join the change); otherwise
+     * output 0 takes the whole output. Output 0 below the chain's soft dust limit pays that chain's surcharge on top of
+     * the fee (change is never under it), and one below the hard limit is refused.
+     */
+    public static WalletTransaction sendInscription(Wallet wallet, Pinned inscribed, long offset, int inscriptionsOnOutput, Address recipient,
+                                                    List<Pinned> feeCandidates, double feeRate, double minRelayFeeRate) throws InsufficientFundsException {
         checkRecipient(recipient);
-        List<Planned> outputs = List.of(new Planned(new TransactionOutput(null, inscribed.utxo().getValue(), recipient.getOutputScript()), recipient, null, null));
-        return build(wallet, List.of(inscribed), outputs, feeCandidates, feeRate, minRelayFeeRate);
+        Coin coin = wallet.getCoin();
+        long value = inscribed.utxo().getValue();
+        if(offset > 0 && inscriptionsOnOutput == 1) {
+            long split = offset + postage(coin, recipient.getScriptType());
+            if(split < value) {
+                value = split;
+            }
+        }
+        if(value < coin.getHardDustLimit()) {
+            throw new IllegalArgumentException("An output of " + value + " is below the dust limit of " + coin.getHardDustLimit() + " and would not relay");
+        }
+        long surcharge = value < coin.getDustLimit() ? coin.getSoftDustSurcharge() : 0;
+        List<Planned> outputs = List.of(new Planned(new TransactionOutput(null, value, recipient.getOutputScript()), recipient, null, null));
+        return build(wallet, List.of(inscribed), outputs, feeCandidates, feeRate, minRelayFeeRate, surcharge);
     }
 
     public static WalletTransaction sendRunes(Wallet wallet, List<Pinned> runeInputs, Address recipient, RuneId id, BigInteger amount,
@@ -103,6 +139,12 @@ public final class CollectibleTransactions {
 
     static WalletTransaction build(Wallet wallet, List<Pinned> fixedInputs, List<Planned> planned, List<Pinned> feeCandidates,
                                            double feeRate, double minRelayFeeRate) throws InsufficientFundsException {
+        return build(wallet, fixedInputs, planned, feeCandidates, feeRate, minRelayFeeRate, 0);
+    }
+
+    /** As above, with a fixed surcharge added to the fee (the soft dust fee of the Dogecoin-derived chains). */
+    static WalletTransaction build(Wallet wallet, List<Pinned> fixedInputs, List<Planned> planned, List<Pinned> feeCandidates,
+                                           double feeRate, double minRelayFeeRate, long surcharge) throws InsufficientFundsException {
         List<Pinned> candidates = new ArrayList<>(feeCandidates);
         candidates.removeIf(candidate -> fixedInputs.stream().anyMatch(fixed -> fixed.utxo().equals(candidate.utxo())));
         candidates.sort(Comparator.comparingLong((Pinned p) -> p.utxo().getValue()).reversed());
@@ -116,14 +158,14 @@ public final class CollectibleTransactions {
             long inputValue = inputs.stream().mapToLong(p -> p.utxo().getValue()).sum();
 
             Transaction noChange = transaction(wallet, inputs, planned, null);
-            long noChangeFee = fee(noChange, feeRate, minRelayFeeRate);
+            long noChangeFee = fee(noChange, feeRate, minRelayFeeRate) + surcharge;
             if(inputValue - plannedValue < noChangeFee) {
                 continue;
             }
 
             WalletNode changeNode = wallet.getFreshNode(KeyPurpose.CHANGE, planned.stream().map(Planned::node).filter(Objects::nonNull).findFirst().orElse(null));
             Transaction withChange = transaction(wallet, inputs, planned, new TransactionOutput(null, 0, changeNode.getOutputScript()));
-            long changeFee = fee(withChange, feeRate, minRelayFeeRate);
+            long changeFee = fee(withChange, feeRate, minRelayFeeRate) + surcharge;
             long change = inputValue - plannedValue - changeFee;
             TransactionOutput probe = new TransactionOutput(null, change, changeNode.getOutputScript());
             if(change > wallet.getScriptType().getDustThreshold(probe, Transaction.DUST_RELAY_TX_FEE)) {
