@@ -48,7 +48,8 @@ public final class CollectibleTransactions {
 
     /**
      * Sends the inscription on an output. With the inscription at a positive offset, alone on its output, output 0 is cut
-     * to offset plus the coin's postage so the sats before it stay in the wallet (they join the change); otherwise
+     * to offset plus the coin's postage: the first offset + postage sats (those before the inscription, the inscription's
+     * sat and the postage after it) go to the recipient, and the sats after them return to the wallet as change. Otherwise
      * output 0 takes the whole output. Output 0 below the chain's soft dust limit pays that chain's surcharge on top of
      * the fee (change is never under it), and one below the hard limit is refused.
      */
@@ -168,7 +169,9 @@ public final class CollectibleTransactions {
             long changeFee = fee(withChange, feeRate, minRelayFeeRate) + surcharge;
             long change = inputValue - plannedValue - changeFee;
             TransactionOutput probe = new TransactionOutput(null, change, changeNode.getOutputScript());
-            if(change > wallet.getScriptType().getDustThreshold(probe, Transaction.DUST_RELAY_TX_FEE)) {
+            //The same rule as ScriptType.getDustThreshold, but with the wallet's coin's dust limit, not the focused coin's
+            long dust = Math.max(wallet.getScriptType().getFee(probe, Transaction.DUST_RELAY_TX_FEE, Transaction.DUST_RELAY_TX_FEE), wallet.getCoin().getDustLimit());
+            if(change > dust) {
                 return walletTransaction(wallet, inputs, planned, changeNode, change, changeFee);
             }
             return walletTransaction(wallet, inputs, planned, null, 0, inputValue - plannedValue);

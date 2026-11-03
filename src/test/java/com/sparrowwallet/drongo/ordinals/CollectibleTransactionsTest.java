@@ -246,6 +246,24 @@ public class CollectibleTransactionsTest {
         Assertions.assertEquals(400, wtx.getFee());
     }
 
+    /** Change below the wallet's coin's dust limit is never made, whichever coin has the focus while the send is built. */
+    @Test
+    public void changeDustFollowsTheWalletsCoinNotTheFocusedOne() throws Exception {
+        useDogecoin();
+        wallet.setCoin(Coin.DOGECOIN);
+        //100,000 inscription plus 1,000,000 surcharge, a fee under 2,000, and about 500,000 left: dust on Dogecoin, not on Litecoin
+        List<CollectibleTransactions.Pinned> utxos = fund(100_000, 1_502_000);
+        Coin focused = Coin.beginScope(Coin.LITECOIN);
+        WalletTransaction wtx;
+        try {
+            wtx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), 0, 1, recipient, utxos.subList(1, 2), 2.0, 1.0);
+        } finally {
+            Coin.endScope(focused);
+        }
+        Assertions.assertEquals(1, wtx.getTransaction().getOutputs().size(), "no change under Dogecoin's dust limit");
+        Assertions.assertEquals(1_502_000, wtx.getFee());
+    }
+
     @Test
     public void notEnoughFeeCandidatesThrows() {
         List<CollectibleTransactions.Pinned> utxos = fund(10_000, 50);
