@@ -23,8 +23,22 @@ public class FinalizingPSBTWallet extends Wallet {
     private final byte[] sigHashPrefix;
 
     public FinalizingPSBTWallet(PSBT psbt) {
+        this(psbt, null);
+    }
+
+    /**
+     * A finalizing wallet for a PSBT opened beside the given wallet. A PSBT marked with its coin is hashed by its own chain's rule; an unmarked one
+     * (made by another app) by the rule of the wallet it was opened with, where there is one, since nothing else says which chain it is for.
+     */
+    public FinalizingPSBTWallet(PSBT psbt, Wallet contextWallet) {
         super("Finalizing PSBT Wallet");
-        sigHashPrefix = psbt.getSigHashPrefix();
+        if(psbt.getCoin() == null && contextWallet != null) {
+            setCoin(contextWallet.getCoin());
+            sigHashPrefix = contextWallet.getSigHashPrefix();
+            psbt.setSigHashPrefix(sigHashPrefix);
+        } else {
+            sigHashPrefix = psbt.getSigHashPrefix();
+        }
 
         if(!psbt.isSigned()) {
             throw new IllegalArgumentException("Only a fully signed or finalized PSBT can be used");

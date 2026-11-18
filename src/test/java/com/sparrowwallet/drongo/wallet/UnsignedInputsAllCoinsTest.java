@@ -5,6 +5,7 @@ import com.sparrowwallet.drongo.KeyPurpose;
 import com.sparrowwallet.drongo.Network;
 import com.sparrowwallet.drongo.Utils;
 import com.sparrowwallet.drongo.address.P2PKHAddress;
+import com.sparrowwallet.drongo.crypto.ECDSASignature;
 import com.sparrowwallet.drongo.crypto.ECKey;
 import com.sparrowwallet.drongo.policy.Policy;
 import com.sparrowwallet.drongo.policy.PolicyType;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 
+import java.math.BigInteger;
 import java.util.*;
 import java.util.function.Function;
 
@@ -164,6 +166,114 @@ public class UnsignedInputsAllCoinsTest {
             }
             assertFlagged(wallet, new Transaction(halfForged.bitcoinSerialize()), name + " one honest signature, one by another key");
         }
+    }
+
+    /**
+     * Before strict DER (BIP66 and its ports) chains accepted looser signature encodings, and they also accept high S values, so an old mined spend
+     * can carry either. drongo verifies those it can read, and one it cannot read is not a finding against a mined spend: the check that leaves a
+     * spend reported as mined out of the history (getInvalidlySignedInputs) keeps it, while an unconfirmed one is still left out (getUnsignedInputs).
+     */
+    @Test
+    public void looseSignatureEncodingsOfOlderChains() throws Exception {
+        Coin scope = Coin.beginScope(Coin.DOGECOIN);
+        try {
+            Wallet wallet = buildWallet(Coin.DOGECOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+            fund(wallet, 0);
+            fund(wallet, 1);
+            Transaction signed = signedSpend(wallet);
+            Function<Sha256Hash, Transaction> lookup = txid -> body(wallet, txid);
+            Map<Script, WalletNode> scripts = wallet.getWalletOutputScripts();
+            int mined = 2_000_000;
+
+            //Each input's own signature, re-encoded
+            List<ECDSASignature> signatures = new ArrayList<>();
+            for(TransactionInput input : signed.getInputs()) {
+                byte[] slot = signatureSlots(input, ScriptType.P2PKH).getFirst();
+                signatures.add(ECDSASignature.decodeFromDER(Arrays.copyOf(slot, slot.length - 1)));
+            }
+
+            //A length in long form, an integer with a needless zero byte, and a high S: all valid before BIP66 and BIP62, and all read and verified here
+            for(String variant : List.of("long form length", "padded R", "high S")) {
+                Transaction reencoded = editEachInput(signed, i -> {
+                    ECDSASignature ecdsa = signatures.get(i);
+                    BigInteger s = variant.equals("high S") ? ECKey.CURVE.getN().subtract(ecdsa.s) : ecdsa.s;
+                    return der(ecdsa.r, s, variant.equals("padded R"), variant.equals("long form length"));
+                });
+                Assertions.assertFalse(Wallet.hasUnreadableSignature(reencoded.getInputs().getFirst()), variant);
+                Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(reencoded, lookup, scripts, null), variant + ": unconfirmed, accepted");
+                Assertions.assertEquals(Set.of(), wallet.getInvalidlySignedInputs(reencoded, lookup, scripts, mined), variant + ": mined, accepted");
+            }
+
+            //An encoding drongo cannot read at all: unconfirmed it is left out, mined it is kept, since nothing shows it is not validly signed
+            Transaction unreadable = editEachInput(signed, i -> {
+                byte[] bytes = der(signatures.get(i).r, signatures.get(i).s, false, false);
+                bytes[1] = (byte)0x7f;
+                return bytes;
+            });
+            Assertions.assertTrue(Wallet.hasUnreadableSignature(unreadable.getInputs().getFirst()));
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(unreadable, lookup, scripts, null).size(), "unconfirmed, left out");
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(unreadable, lookup, scripts, mined).size(), "not shown to be signed");
+            Assertions.assertEquals(Set.of(), wallet.getInvalidlySignedInputs(unreadable, lookup, scripts, mined), "mined, no definite finding, kept");
+
+            //A readable signature that does not verify is a definite finding, mined or not
+            Transaction redirected = redirect(signed);
+            Assertions.assertEquals(2, wallet.getInvalidlySignedInputs(redirected, lookup, scripts, mined).size(), "mined forgery found");
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    /**
+     * A copy of a wallet keeps its network, which with its stored tip decides a Luckycoin test chain's signature hash: a copy signs as the wallet does
+     */
+    @Test
+    public void walletCopyKeepsItsNetwork() throws Exception {
+        Coin scope = Coin.beginScope(Coin.LUCKYCOIN);
+        try {
+            Wallet wallet = buildWallet(Coin.LUCKYCOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+            wallet.setNetwork(Network.TESTNET);
+            wallet.setStoredBlockHeight(1000);
+            Assertions.assertEquals(Network.MAINNET, Network.get());
+            Assertions.assertEquals(0, wallet.getSigHashPrefix().length);
+            Wallet copy = wallet.copy();
+            Assertions.assertEquals(Network.TESTNET, copy.getNetwork());
+            Assertions.assertArrayEquals(wallet.getSigHashPrefix(), copy.getSigHashPrefix());
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    private static Transaction editEachInput(Transaction transaction, java.util.function.IntFunction<byte[]> signature) {
+        Transaction edited = new Transaction(transaction.bitcoinSerialize());
+        for(int i = 0; i < edited.getInputs().size(); i++) {
+            setSignatureSlots(edited, i, ScriptType.P2PKH, List.of(signature.apply(i)), null);
+        }
+        return new Transaction(edited.bitcoinSerialize());
+    }
+
+    /** A signature with SIGHASH_ALL in the encoding asked for, built here byte by byte */
+    private static byte[] der(BigInteger r, BigInteger s, boolean padR, boolean longFormLength) {
+        byte[] rBytes = r.toByteArray();
+        if(padR) {
+            rBytes = Utils.concat(new byte[] {0}, rBytes);
+        }
+        byte[] sBytes = s.toByteArray();
+        java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+        body.write(0x02);
+        body.write(rBytes.length);
+        body.writeBytes(rBytes);
+        body.write(0x02);
+        body.write(sBytes.length);
+        body.writeBytes(sBytes);
+        java.io.ByteArrayOutputStream sequence = new java.io.ByteArrayOutputStream();
+        sequence.write(0x30);
+        if(longFormLength) {
+            sequence.write(0x81);
+        }
+        sequence.write(body.size());
+        sequence.writeBytes(body.toByteArray());
+        sequence.write(SigHash.ALL.value);
+        return sequence.toByteArray();
     }
 
     private static void assertAccepted(Wallet wallet, Transaction transaction, String message) {

@@ -594,6 +594,19 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         return getCoin().getSigHashPrefix(walletNetwork, tipHeight);
     }
 
+    /**
+     * The bytes this wallet's chain put before each signature hash preimage of a transaction mined at the given height, which go by that height alone
+     * (see Coin.getSigHashPrefixAtHeight). For an unconfirmed transaction (null, zero or below) it is the chain's next block that checks it, as
+     * getSigHashPrefix() works out.
+     */
+    public byte[] getSigHashPrefix(Integer blockHeight) {
+        if(blockHeight == null || blockHeight <= 0) {
+            return getSigHashPrefix();
+        }
+
+        return getCoin().getSigHashPrefixAtHeight(blockHeight);
+    }
+
     public PolicyType getPolicyType() {
         return policyType;
     }
@@ -1836,11 +1849,24 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
      * where any transaction spent by the inputs is unknown, since its signature hash commits to all of their outputs
      */
     public Map<TransactionInput, Map<TransactionSignature, Keystore>> getSignedKeystores(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions) {
-        return getSignedKeystores(transaction, inputTransactions, getSigningNodes(transaction, inputTransactions));
+        return getSignedKeystores(transaction, inputTransactions, getSigningNodes(transaction, inputTransactions), null);
+    }
+
+    /**
+     * Determines which keystores have signed a transaction, for a transaction mined at the given height. The signature hash is the chain's at that
+     * height (see Coin.getSigHashPrefixAtHeight); an unconfirmed transaction (null, zero or below) is hashed as the chain's next block will check it.
+     *
+     * @param transaction The signed transaction
+     * @param blockHeight The height of the block holding the transaction, or null, zero or below where it is unconfirmed
+     * @return A map keyed with the transactionInput mapped to a map of the signatures and associated keystores that signed it
+     */
+    public Map<TransactionInput, Map<TransactionSignature, Keystore>> getSignedKeystores(Transaction transaction, Integer blockHeight) {
+        Function<Sha256Hash, Transaction> inputTransactions = this::getWalletTransactionBody;
+        return getSignedKeystores(transaction, inputTransactions, getSigningNodes(transaction, inputTransactions), blockHeight);
     }
 
     private Map<TransactionInput, Map<TransactionSignature, Keystore>> getSignedKeystores(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions,
-                                                                                         Map<TransactionInput, WalletNode> signingNodes) {
+                                                                                         Map<TransactionInput, WalletNode> signingNodes, Integer blockHeight) {
         Map<TransactionInput, Map<TransactionSignature, Keystore>> signedKeystores = new LinkedHashMap<>();
 
         boolean anyTaproot = signingNodes.values().stream().anyMatch(node -> node.getWallet().getScriptType() == P2TR);
@@ -1866,7 +1892,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
                 Script signingScript = getSigningScript(txInput, spentTxo);
                 List<TransactionSignature> signatures = txInput.hasWitness() ? txInput.getWitness().getSignatures() : txInput.getScriptSig().getSignatures();
                 Map<Byte, Sha256Hash> sigHashes = new HashMap<>();
-                byte[] sigHashPrefix = signingWallet.getSigHashPrefix();
+                byte[] sigHashPrefix = signingWallet.getSigHashPrefix(blockHeight);
 
                 for(ECKey sigPublicKey : keystoreKeysForNode.keySet()) {
                     for(TransactionSignature signature : signatures) {
@@ -1922,18 +1948,86 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
      * @return The inputs spending this wallet's outputs that are not shown to be signed by it
      */
     public Set<TransactionInput> getUnsignedInputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions, Map<Script, WalletNode> walletOutputScripts) {
+        return getUnsignedInputs(transaction, inputTransactions, walletOutputScripts, null);
+    }
+
+    /**
+     * Determines which inputs of a signed transaction spend this wallet's outputs without valid signatures from enough of its keystores to do so,
+     * for a transaction mined at the given height, whose signature hash is the chain's at that height
+     *
+     * @param transaction The signed transaction
+     * @param inputTransactions Returns the transaction with the given txid, or null where it is not known
+     * @param walletOutputScripts This wallet's output scripts, as returned by getWalletOutputScripts()
+     * @param blockHeight The height of the block holding the transaction, or null, zero or below where it is unconfirmed
+     * @return The inputs spending this wallet's outputs that are not shown to be signed by it
+     */
+    public Set<TransactionInput> getUnsignedInputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions, Map<Script, WalletNode> walletOutputScripts,
+                                                   Integer blockHeight) {
+        return getUnsignedInputs(transaction, inputTransactions, walletOutputScripts, blockHeight, false);
+    }
+
+    /**
+     * Determines which inputs of a signed transaction spend this wallet's outputs and were checked and found without valid signatures from enough of
+     * its keystores. Unlike getUnsignedInputs, an input that could not be checked is not among them: one whose signature hash commits to a transaction
+     * not known, or one carrying a signature drongo cannot read (an encoding older chains accepted before strict DER, say). This is the finding to act
+     * on where the transaction is claimed to be mined, which it could not be with an input not validly signed.
+     *
+     * @param transaction The signed transaction
+     * @param inputTransactions Returns the transaction with the given txid, or null where it is not known
+     * @param walletOutputScripts This wallet's output scripts, as returned by getWalletOutputScripts()
+     * @param blockHeight The height of the block holding the transaction, or null, zero or below where it is unconfirmed
+     * @return The inputs spending this wallet's outputs shown not to be signed by it
+     */
+    public Set<TransactionInput> getInvalidlySignedInputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions, Map<Script, WalletNode> walletOutputScripts,
+                                                          Integer blockHeight) {
+        return getUnsignedInputs(transaction, inputTransactions, walletOutputScripts, blockHeight, true);
+    }
+
+    private Set<TransactionInput> getUnsignedInputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions, Map<Script, WalletNode> walletOutputScripts,
+                                                    Integer blockHeight, boolean definiteOnly) {
         Map<TransactionInput, WalletNode> signingNodes = getSigningNodes(transaction, inputTransactions, walletOutputScripts);
-        Map<TransactionInput, Map<TransactionSignature, Keystore>> signedKeystores = getSignedKeystores(transaction, inputTransactions, signingNodes);
+        Map<TransactionInput, Map<TransactionSignature, Keystore>> signedKeystores = getSignedKeystores(transaction, inputTransactions, signingNodes, blockHeight);
         Set<TransactionInput> unsignedInputs = new LinkedHashSet<>();
         for(Map.Entry<TransactionInput, WalletNode> entry : signingNodes.entrySet()) {
             Map<TransactionSignature, Keystore> signatures = signedKeystores.get(entry.getKey());
             int threshold = entry.getValue().getWallet().getDefaultPolicy().getNumSignaturesRequired();
             if(signatures == null || new HashSet<>(signatures.values()).size() < threshold) {
-                unsignedInputs.add(entry.getKey());
+                if(!definiteOnly || (signatures != null && !hasUnreadableSignature(entry.getKey()))) {
+                    unsignedInputs.add(entry.getKey());
+                }
             }
         }
 
         return unsignedInputs;
+    }
+
+    /**
+     * Whether an input carries a push that is shaped as an ECDSA signature (a DER sequence) but cannot be decoded as one. Chains before strict DER
+     * (BIP66 and its ports) accepted encodings that a strict reader may refuse, so a signature of that kind proves nothing either way.
+     */
+    public static boolean hasUnreadableSignature(TransactionInput txInput) {
+        List<byte[]> pushes = new ArrayList<>();
+        for(ScriptChunk chunk : txInput.getScriptSig().getChunks()) {
+            if(chunk.data != null) {
+                pushes.add(chunk.data);
+            }
+        }
+        if(txInput.hasWitness()) {
+            pushes.addAll(txInput.getWitness().getPushes());
+        }
+
+        for(byte[] push : pushes) {
+            //A DER sequence tag and at least the room for two integers and a sighash byte; pubkeys start 02, 03 or 04 and wallet scripts with an opcode
+            if(push.length >= 9 && push[0] == 0x30 && push.length != 64 && push.length != 65) {
+                try {
+                    TransactionSignature.decodeFromBitcoin(push, false);
+                } catch(Exception e) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private List<TransactionOutput> getSpentOutputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions) {
@@ -2811,6 +2905,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         copy.setPolicyType(policyType);
         copy.setScriptType(scriptType);
         copy.setCoin(coin);
+        copy.setNetwork(network);
         copy.setDefaultPolicy(defaultPolicy.copy());
         for(Keystore keystore : keystores) {
             copy.getKeystores().add(keystore.copy());

@@ -526,7 +526,7 @@ public enum Coin {
         return mweb;
     }
 
-    /** The height from which Luckycoin's signature hashes start with its chain id: the next block's previous block is at or above it */
+    /** The height from which Luckycoin's signature hashes start with its chain id: a block at or above it, and the mempool once the tip is */
     public static final int LUCKYCOIN_CHAIN_ID_HEIGHT = 276500;
 
     //Luckycoin's replay protection (LuckycoinFoundation/Luckycoin @8b1fa2b5, script/interpreter.h line 111, CHAIN_ID "LUCKYCOIN_REVIVAL"),
@@ -537,15 +537,26 @@ public enum Coin {
      * What this chain puts before the preimage of every legacy and segwit v0 signature hash, or nothing where it hashes as Bitcoin does. This is the
      * one place the rule lives; callers that sign or verify a transaction carry the result to Transaction's hash functions.
      *
-     * Luckycoin prefixes its chain id once the chain tip is at or above height 276500 (validation.cpp GetChainSigVersion, called with the tip by
-     * AcceptToMemoryPoolWorker and with the previous block by ConnectBlock; interpreter.cpp SignatureHash). The height is fixed, the same on every
-     * network. Mainnet is far above it, so it always takes the prefix. On testnet and regtest it goes by the chain's tip where the caller knows it,
-     * and where it does not the prefix is left out: the only such chains in use are the private test chains mined from the testnet genesis, all
-     * below the height, whose nodes check the original hash.
+     * This is the rule for a transaction not yet mined, as the mempool checks it: Luckycoin prefixes its chain id once the chain tip is at or above
+     * height 276500 (validation.cpp GetChainSigVersion, called with the tip by AcceptToMemoryPoolWorker; interpreter.cpp SignatureHash). A mined
+     * transaction goes by the height of its own block instead, see getSigHashPrefixAtHeight. The height is fixed, the same on every network.
+     * Mainnet is far above it, so it always takes the prefix. On testnet and regtest it goes by the chain's tip where the caller knows it, and where
+     * it does not the prefix is left out: the only such chains in use are the private test chains mined from the testnet genesis, all below the
+     * height, whose nodes check the original hash.
      *
      * @param network the network of the chain the transaction is for
      * @param tipHeight the height of that chain's tip as the caller knows it, or null where it is not known
      */
+    /**
+     * What this chain put before the preimage of every legacy and segwit v0 signature hash of a transaction mined in the block at the given height.
+     * Luckycoin's ConnectBlock checks a block's transactions with GetChainSigVersion of that block's own index (validation.cpp), so a transaction
+     * mined at or above 276500 carries the chain id and one mined below it does not, on every network.
+     *
+     * @param blockHeight the height of the block holding the transaction
+     */
+    public byte[] getSigHashPrefixAtHeight(int blockHeight) {
+        return this == LUCKYCOIN && blockHeight >= LUCKYCOIN_CHAIN_ID_HEIGHT ? LUCKYCOIN_CHAIN_ID.clone() : new byte[0];
+    }
     public byte[] getSigHashPrefix(Network network, Integer tipHeight) {
         if(this != LUCKYCOIN) {
             return new byte[0];

@@ -79,8 +79,10 @@ public class NetworkSignedSpendsTest {
 
         Map<Script, WalletNode> walletOutputScripts = new LinkedHashMap<>();
         Wallet wallet = watchWallet(spend, transaction, lookup, walletOutputScripts);
-        assertAccepted(wallet, transaction, lookup, walletOutputScripts, spend.toString());
-        assertFlagged(wallet, redirect(transaction), lookup, walletOutputScripts, spend + " outputs changed");
+        //Judged by the chain's rule at the height it was mined at (unconfirmed for the mempool sample)
+        Integer height = spend.height() > 0 ? spend.height() : null;
+        assertAccepted(wallet, transaction, lookup, walletOutputScripts, height, spend.toString());
+        assertFlagged(wallet, redirect(transaction), lookup, walletOutputScripts, height, spend + " outputs changed");
     }
 
     /**
@@ -181,8 +183,7 @@ public class NetworkSignedSpendsTest {
 
     /**
      * A Luckycoin mainnet spend signed the way the app signs (PSBT, sign, finalise) carries signatures over the chain id hash, which is what mainnet
-     * nodes check, and not over Bitcoin's. The preimage here is built by this test, not by drongo. The multisig case is checked with drongo's hash,
-     * which the single signature case and the real spend above hold to the chain.
+     * nodes check, and not over Bitcoin's. The preimages here are built by this test, not by drongo's hash functions.
      */
     @Test
     public void luckycoinMainnetSpendSignedByTheAppCommitsToTheChainId() throws Exception {
@@ -205,8 +206,8 @@ public class NetworkSignedSpendsTest {
                 ECKey[] keys = ScriptType.MULTISIG.getPublicKeysFromScript(redeemScript);
                 for(ScriptChunk chunk : chunks.subList(1, chunks.size() - 1)) {
                     TransactionSignature signature = TransactionSignature.decodeFromBitcoin(chunk.data, false);
-                    Sha256Hash revival = multisigSigned.hashForLegacySignature(i, redeemScript.getProgram(), SigHash.ALL.value, LUCKYCOIN_CHAIN_ID);
-                    Sha256Hash bitcoin = multisigSigned.hashForLegacySignature(i, redeemScript.getProgram(), SigHash.ALL.value);
+                    Sha256Hash revival = legacyPreimageHash(multisigSigned, i, redeemScript, LUCKYCOIN_CHAIN_ID);
+                    Sha256Hash bitcoin = legacyPreimageHash(multisigSigned, i, redeemScript, new byte[0]);
                     Assertions.assertTrue(Arrays.stream(keys).anyMatch(key -> key.verify(revival, signature)), "multisig input " + i + " over Luckycoin's hash");
                     Assertions.assertTrue(Arrays.stream(keys).noneMatch(key -> key.verify(bitcoin, signature)), "multisig input " + i + " not over Bitcoin's");
                 }
@@ -292,6 +293,7 @@ public class NetworkSignedSpendsTest {
 
             PSBT bitcoinRule = UnsignedInputsAllCoinsTest.spendPsbt(wallet);
             Assertions.assertEquals(Coin.LUCKYCOIN, bitcoinRule.getCoin());
+            byte[] unsigned = bitcoinRule.serialize();
             bitcoinRule.setSigHashPrefix(new byte[0]);
             for(Map.Entry<PSBTInput, WalletNode> entry : wallet.getSigningNodes(bitcoinRule).entrySet()) {
                 entry.getKey().sign(wallet.getKeystores().getFirst().getKey(entry.getValue()));
@@ -303,6 +305,28 @@ public class NetworkSignedSpendsTest {
             Assertions.assertTrue(finaliseError.getMessage().contains(PSBT.LUCKYCOIN_SIGNATURE_RULE), finaliseError.getMessage());
             Assertions.assertFalse(bitcoinRule.isFinalized());
 
+            //As the app reads a PSBT from a file, QR code or device (signatures not verified on reading), then combines it with the one it holds
+            PSBT incoming = new PSBT(serialized, false);
+            PSBT held = new PSBT(unsigned, false);
+            PSBTSignatureException combineError = Assertions.assertThrows(PSBTSignatureException.class, () -> held.verifyCombinedSignatures(incoming));
+            Assertions.assertTrue(combineError.getMessage().contains(PSBT.LUCKYCOIN_SIGNATURE_RULE), combineError.getMessage());
+            Assertions.assertThrows(IllegalArgumentException.class, () -> wallet.finalise(incoming));
+            Assertions.assertFalse(incoming.isFinalized());
+
+            //One without the coin mark, from another app, opened beside a Luckycoin wallet: the finalizing wallet takes that wallet's chain
+            PSBT unmarked = new PSBT(serialized, false);
+            unmarked.getGlobalProprietary().remove(PSBT.COIN_MARK_KEY);
+            Assertions.assertNull(unmarked.getCoin());
+            Assertions.assertEquals(0, unmarked.getSigHashPrefix().length);
+            FinalizingPSBTWallet finalizing = new FinalizingPSBTWallet(unmarked, wallet);
+            Assertions.assertArrayEquals(LUCKYCOIN_CHAIN_ID, finalizing.getSigHashPrefix());
+            Assertions.assertThrows(IllegalArgumentException.class, () -> finalizing.finalise(unmarked));
+            //Without that wallet nothing says it is Luckycoin's, and it would be finalised
+            PSBT unmarkedAlone = new PSBT(serialized, false);
+            unmarkedAlone.getGlobalProprietary().remove(PSBT.COIN_MARK_KEY);
+            new FinalizingPSBTWallet(unmarkedAlone).finalise(unmarkedAlone);
+            Assertions.assertTrue(unmarkedAlone.isFinalized());
+
             PSBT appSigned = UnsignedInputsAllCoinsTest.spendPsbt(wallet);
             wallet.sign(appSigned);
             PSBT read = new PSBT(appSigned.serialize(), true);
@@ -311,6 +335,67 @@ public class NetworkSignedSpendsTest {
             Assertions.assertTrue(read.isFinalized());
         } finally {
             Coin.endScope(scope);
+        }
+    }
+
+    /**
+     * A mined Luckycoin transaction is checked by the rule at the height of its own block (ConnectBlock), not by the tip's: one mined below 276500
+     * carries Bitcoin's hash and must be accepted at its height, though the mainnet tip rule would flag it; one mined at or above carries the chain id.
+     * The spends are real, from luckyscan.org (see NetworkSpends).
+     */
+    @Test
+    public void luckycoinSpendsAreJudgedByTheHeightTheyWereMinedAt() {
+        Coin scope = Coin.beginScope(Coin.LUCKYCOIN);
+        try {
+            NetworkSpend below = SPENDS.stream().filter(s -> s.label().equals("p2pkh mined below 276500")).findFirst().orElseThrow();
+            NetworkSpend justAbove = SPENDS.stream().filter(s -> s.label().equals("p2pkh mined just above 276500")).findFirst().orElseThrow();
+            NetworkSpend recent = SPENDS.stream().filter(s -> s.coin() == Coin.LUCKYCOIN && s.label().equals("p2pkh")).findFirst().orElseThrow();
+            Assertions.assertTrue(below.height() < Coin.LUCKYCOIN_CHAIN_ID_HEIGHT);
+            Assertions.assertTrue(justAbove.height() >= Coin.LUCKYCOIN_CHAIN_ID_HEIGHT && justAbove.height() < Coin.LUCKYCOIN_CHAIN_ID_HEIGHT + 2000);
+
+            for(NetworkSpend spend : List.of(below, justAbove, recent)) {
+                Transaction transaction = new Transaction(Utils.hexToBytes(spend.rawTransaction()));
+                Map<Sha256Hash, Transaction> spentTransactions = spentTransactions(spend);
+                Function<Sha256Hash, Transaction> lookup = spentTransactions::get;
+                Map<Script, WalletNode> walletOutputScripts = new LinkedHashMap<>();
+                Wallet wallet = watchWallet(spend, transaction, lookup, walletOutputScripts);
+                assertAccepted(wallet, transaction, lookup, walletOutputScripts, spend.height(), spend + " at its height");
+                if(spend == below) {
+                    //Judged as an unconfirmed mainnet spend, or as if mined at the height, it would be hidden
+                    assertFlagged(wallet, transaction, lookup, walletOutputScripts, null, spend + " by the mainnet tip rule");
+                    assertFlagged(wallet, transaction, lookup, walletOutputScripts, Coin.LUCKYCOIN_CHAIN_ID_HEIGHT, spend + " as if mined at 276500");
+                } else {
+                    assertFlagged(wallet, transaction, lookup, walletOutputScripts, Coin.LUCKYCOIN_CHAIN_ID_HEIGHT - 1, spend + " as if mined at 276499");
+                }
+            }
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    /**
+     * drongo's legacy and witness v0 hashes, with and without the chain id, against preimages built here from the parts each scheme lists
+     */
+    @Test
+    public void signatureHashesWithTheChainIdMatchPreimagesBuiltHere() {
+        Transaction transaction = new Transaction();
+        transaction.setVersion(2);
+        transaction.addInput(Sha256Hash.of(new byte[] {1}), 3, new Script(new byte[0]));
+        transaction.addInput(Sha256Hash.of(new byte[] {2}), 0, new Script(new byte[0]));
+        transaction.getInputs().get(1).setSequenceNumber(0xfffffffdL);
+        transaction.addOutput(123_456_789L, ScriptType.P2PKH.getOutputScript(ATTACKER_HASH));
+        transaction.addOutput(42_000L, ScriptType.P2WPKH.getOutputScript(Utils.hexToBytes("cc00000000000000000000000000000000000033")));
+        transaction.setLocktime(276600);
+        Script scriptCode = ScriptType.P2PKH.getOutputScript(Utils.hexToBytes("dd00000000000000000000000000000000000044"));
+
+        for(int i = 0; i < 2; i++) {
+            for(byte[] prefix : List.of(new byte[0], LUCKYCOIN_CHAIN_ID)) {
+                Assertions.assertEquals(witnessPreimageHash(transaction, i, scriptCode, 5_000_000L, prefix),
+                        transaction.hashForWitnessSignature(i, scriptCode.getProgram(), 5_000_000L, SigHash.ALL.value, prefix), "witness v0 input " + i + " prefix " + prefix.length);
+                Assertions.assertEquals(legacyPreimageHash(transaction, i, scriptCode, prefix),
+                        transaction.hashForLegacySignature(i, scriptCode.getProgram(), SigHash.ALL.value, prefix), "legacy input " + i + " prefix " + prefix.length);
+            }
+            Assertions.assertNotEquals(witnessPreimageHash(transaction, i, scriptCode, 5_000_000L, new byte[0]), witnessPreimageHash(transaction, i, scriptCode, 5_000_000L, LUCKYCOIN_CHAIN_ID));
         }
     }
 
@@ -339,13 +424,68 @@ public class NetworkSignedSpendsTest {
         }
         Assertions.assertEquals(SigHash.ALL.value, signature.sighashFlags);
         ECKey pubKey = ECKey.fromPublicOnly(chunks.get(1).data);
+        return pubKey.verify(legacyPreimageHash(transaction, index, spentScript, chainId), signature);
+    }
 
+    /**
+     * The legacy SIGHASH_ALL signature hash built here, not by drongo's hash function: the transaction without witnesses, every script sig emptied but
+     * the signed input's, which carries the script code, then the sighash type, all optionally preceded by a chain id
+     */
+    private static Sha256Hash legacyPreimageHash(Transaction transaction, int index, Script scriptCode, byte[] chainId) {
         Transaction copy = new Transaction(transaction.bitcoinSerialize(false));
         for(int i = 0; i < copy.getInputs().size(); i++) {
-            copy.getInputs().get(i).setScriptBytes(i == index ? spentScript.getProgram() : new byte[0]);
+            copy.getInputs().get(i).setScriptBytes(i == index ? scriptCode.getProgram() : new byte[0]);
         }
         byte[] preimage = Utils.concat(copy.bitcoinSerialize(false), new byte[] {SigHash.ALL.value, 0, 0, 0});
-        return pubKey.verify(Sha256Hash.twiceOf(Utils.concat(chainId, preimage)), signature);
+        return Sha256Hash.twiceOf(Utils.concat(chainId, preimage));
+    }
+
+    /**
+     * The BIP143 SIGHASH_ALL signature hash built here from the parts the BIP lists, not by drongo's hash function, optionally preceded by a chain id
+     * as Luckycoin's SignatureHash writes it before the version (interpreter.cpp line 1203)
+     */
+    private static Sha256Hash witnessPreimageHash(Transaction transaction, int index, Script scriptCode, long amount, byte[] chainId) {
+        java.io.ByteArrayOutputStream prevouts = new java.io.ByteArrayOutputStream();
+        java.io.ByteArrayOutputStream sequences = new java.io.ByteArrayOutputStream();
+        java.io.ByteArrayOutputStream outputs = new java.io.ByteArrayOutputStream();
+        for(TransactionInput input : transaction.getInputs()) {
+            prevouts.writeBytes(Utils.reverseBytes(input.getOutpoint().getHash().getBytes()));
+            prevouts.writeBytes(le32(input.getOutpoint().getIndex()));
+            sequences.writeBytes(le32(input.getSequenceNumber()));
+        }
+        for(TransactionOutput output : transaction.getOutputs()) {
+            outputs.writeBytes(le64(output.getValue()));
+            outputs.writeBytes(new VarInt(output.getScriptBytes().length).encode());
+            outputs.writeBytes(output.getScriptBytes());
+        }
+        TransactionInput input = transaction.getInputs().get(index);
+        java.io.ByteArrayOutputStream preimage = new java.io.ByteArrayOutputStream();
+        preimage.writeBytes(chainId);
+        preimage.writeBytes(le32(transaction.getVersion()));
+        preimage.writeBytes(Sha256Hash.hashTwice(prevouts.toByteArray()));
+        preimage.writeBytes(Sha256Hash.hashTwice(sequences.toByteArray()));
+        preimage.writeBytes(Utils.reverseBytes(input.getOutpoint().getHash().getBytes()));
+        preimage.writeBytes(le32(input.getOutpoint().getIndex()));
+        preimage.writeBytes(new VarInt(scriptCode.getProgram().length).encode());
+        preimage.writeBytes(scriptCode.getProgram());
+        preimage.writeBytes(le64(amount));
+        preimage.writeBytes(le32(input.getSequenceNumber()));
+        preimage.writeBytes(Sha256Hash.hashTwice(outputs.toByteArray()));
+        preimage.writeBytes(le32(transaction.getLocktime()));
+        preimage.writeBytes(le32(SigHash.ALL.value));
+        return Sha256Hash.twiceOf(preimage.toByteArray());
+    }
+
+    private static byte[] le32(long value) {
+        return new byte[] {(byte)value, (byte)(value >> 8), (byte)(value >> 16), (byte)(value >> 24)};
+    }
+
+    private static byte[] le64(long value) {
+        byte[] bytes = new byte[8];
+        for(int i = 0; i < 8; i++) {
+            bytes[i] = (byte)(value >> (8 * i));
+        }
+        return bytes;
     }
 
     private static void checkTaprootSignatures(NetworkSpend spend, Transaction transaction, Function<Sha256Hash, Transaction> lookup) {
@@ -454,13 +594,25 @@ public class NetworkSignedSpendsTest {
     }
 
     private static void assertAccepted(Wallet wallet, Transaction transaction, Function<Sha256Hash, Transaction> lookup, Map<Script, WalletNode> walletOutputScripts, String message) {
+        assertAccepted(wallet, transaction, lookup, walletOutputScripts, null, message);
+    }
+
+    private static void assertAccepted(Wallet wallet, Transaction transaction, Function<Sha256Hash, Transaction> lookup, Map<Script, WalletNode> walletOutputScripts,
+                                       Integer height, String message) {
         Assertions.assertEquals(transaction.getInputs().size(), wallet.getSigningNodes(transaction, lookup, walletOutputScripts).size(), message + ": inputs judged");
-        Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(transaction, lookup, walletOutputScripts), message + ": accepted");
+        Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(transaction, lookup, walletOutputScripts, height), message + ": accepted");
+        Assertions.assertEquals(Set.of(), wallet.getInvalidlySignedInputs(transaction, lookup, walletOutputScripts, height), message + ": no definite finding");
     }
 
     private static void assertFlagged(Wallet wallet, Transaction transaction, Function<Sha256Hash, Transaction> lookup, Map<Script, WalletNode> walletOutputScripts, String message) {
+        assertFlagged(wallet, transaction, lookup, walletOutputScripts, null, message);
+    }
+
+    private static void assertFlagged(Wallet wallet, Transaction transaction, Function<Sha256Hash, Transaction> lookup, Map<Script, WalletNode> walletOutputScripts,
+                                      Integer height, String message) {
         Assertions.assertEquals(transaction.getInputs().size(), wallet.getSigningNodes(transaction, lookup, walletOutputScripts).size(), message + ": inputs judged");
-        Assertions.assertEquals(transaction.getInputs().size(), wallet.getUnsignedInputs(transaction, lookup, walletOutputScripts).size(), message + ": every input flagged");
+        Assertions.assertEquals(transaction.getInputs().size(), wallet.getUnsignedInputs(transaction, lookup, walletOutputScripts, height).size(), message + ": every input flagged");
+        Assertions.assertEquals(transaction.getInputs().size(), wallet.getInvalidlySignedInputs(transaction, lookup, walletOutputScripts, height).size(), message + ": a definite finding");
     }
 
     private static Transaction redirect(Transaction transaction) {
