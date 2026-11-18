@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <g fill="red" stroke="green" stroke-width="3" opacity="0.5" transform="translate(10 20)">
+    <rect width="10" height="10"/>
+    <g fill="blue" opacity=".5" fill-opacity="0.5" transform="scale(2) rotate(90)">
+      <circle r="5" stroke="none" transform="rotate(45 10 10)"/>
+      <ellipse rx="4" ry="2" fill="white" stroke-opacity="0.2" transform="matrix(1 0 0 1 5 6), translate(7), scale(2, 3)"/>
+    </g>
+    <line x2="5" stroke-width="0.25" opacity="2"/>
+  </g>
+  <rect width="1" height="1" transform="rotate(-90) rotate(180) rotate(30)"/>
+</svg>

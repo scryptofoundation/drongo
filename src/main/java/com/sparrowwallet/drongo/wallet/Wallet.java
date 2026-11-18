@@ -54,6 +54,11 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     private LitVmLink litVmLink;
     //Changed on the UI thread, written by the wallet file's update thread
     private final List<PendingMint> pendingMints = new java.util.concurrent.CopyOnWriteArrayList<>();
+    //Inscription checks of the wallet's coins; kept in the wallet database only (transient: not in JSON wallet files)
+    private final transient List<InscriptionCheck> inscriptionChecks = new java.util.concurrent.CopyOnWriteArrayList<>();
+    //Changed by the swap service, written by the wallet file's update thread
+    private final List<SwapEntry> swapEntries = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final List<MakerHistoryEntry> makerHistory = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Map<Sha256Hash, UtxoMixData> utxoMixes = new HashMap<>();
     private Integer storedBlockHeight;
     private Integer gapLimit;
@@ -594,6 +599,24 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         return getCoin().getSigHashPrefix(walletNetwork, tipHeight);
     }
 
+    /** Why a wallet refuses to sign a PSBT marked for another coin */
+    public static final String PSBT_COIN_MISMATCH = "This PSBT is for %s, not for this %s wallet. Wallets of different coins can hold the same keys "
+            + "(Luckycoin and Junkcoin share a derivation path), so a wallet signs only transactions of its own coin.";
+
+    /**
+     * Puts this wallet's chain rule on a PSBT before it is signed or finalised, by software, a device or a card. A PSBT marked for another coin is
+     * refused: wallets of two coins can derive the same keys, and the other coin's transaction would be signed by this coin's rule.
+     *
+     * @throws IllegalStateException where the PSBT is marked for a coin other than this wallet's
+     */
+    public void stampSigHashPrefix(PSBT psbt) {
+        com.sparrowwallet.drongo.Coin marked = psbt.getCoin();
+        if(marked != null && marked != getCoin()) {
+            throw new IllegalStateException(String.format(PSBT_COIN_MISMATCH, marked.toDisplayString(), getCoin().toDisplayString()));
+        }
+        psbt.setSigHashPrefix(getSigHashPrefix());
+    }
+
     /**
      * The bytes this wallet's chain put before each signature hash preimage of a transaction mined at the given height, which go by that height alone
      * (see Coin.getSigHashPrefixAtHeight). For an unconfirmed transaction (null, zero or below) it is the chain's next block that checks it, as
@@ -605,6 +628,42 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         }
 
         return getCoin().getSigHashPrefixAtHeight(blockHeight);
+    }
+
+    /**
+     * The bytes before each signature hash preimage of the given transaction, said to be mined at the given height. A height only the server reports
+     * must not choose a weaker rule than the chain now has: where the chain needs Luckycoin's chain id (see getSigHashPrefix()) but the height is below
+     * the one it starts at, the old rule is used only if the height is consistent with what this wallet knows, at or above the height of every
+     * transaction it spends that the wallet holds, and not above the tip the wallet has synced to. Otherwise the transaction is judged by the chain
+     * id rule.
+     *
+     * @param transaction The transaction to be judged
+     * @param blockHeight The height of the block said to hold it, or null, zero or below where it is unconfirmed
+     */
+    public byte[] getSigHashPrefix(Transaction transaction, Integer blockHeight) {
+        byte[] current = getSigHashPrefix();
+        if(blockHeight == null || blockHeight <= 0) {
+            return current;
+        }
+
+        byte[] atHeight = getCoin().getSigHashPrefixAtHeight(blockHeight);
+        if(atHeight.length > 0 || current.length == 0) {
+            return atHeight;
+        }
+
+        Wallet master = isMasterWallet() || getMasterWallet() == null ? this : getMasterWallet();
+        Integer tip = storedBlockHeight != null ? storedBlockHeight : master.getStoredBlockHeight();
+        if(tip != null && blockHeight > tip) {
+            return current;
+        }
+        for(TransactionInput input : transaction.getInputs()) {
+            BlockTransaction spent = getWalletTransaction(input.getOutpoint().getHash());
+            if(spent != null && (spent.getHeight() <= 0 || spent.getHeight() > blockHeight)) {
+                return current;
+            }
+        }
+
+        return atHeight;
     }
 
     public PolicyType getPolicyType() {
@@ -699,6 +758,21 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     /** Mints whose reveal is not yet broadcast, kept on the master wallet of the seed. */
     public List<PendingMint> getPendingMints() {
         return pendingMints;
+    }
+
+    /** The inscription check of each of the wallet's coins, kept on the master wallet. */
+    public List<InscriptionCheck> getInscriptionChecks() {
+        return inscriptionChecks;
+    }
+
+    /** This wallet's atomic swaps, each record held sealed. */
+    public List<SwapEntry> getSwapEntries() {
+        return swapEntries;
+    }
+
+    /** How swaps with each maker have gone for this wallet. */
+    public List<MakerHistoryEntry> getMakerHistory() {
+        return makerHistory;
     }
 
     public Map<TableType, WalletTable> getWalletTables() {
@@ -1878,7 +1952,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             Map<ECKey, Keystore> keystoreKeysForNode = signingWallet.getKeystores().stream()
                     .collect(Collectors.toMap(keystore -> signingWallet.getScriptType().getOutputKey(signingWallet.getPolicyType(), keystore.getPubKey(walletNode)), Function.identity(),
                             (u, v) -> {
-                                throw new IllegalStateException("Duplicate keys from different keystores for node " + walletNode);
+                                throw new DuplicateKeystoreKeysException("Duplicate keys from different keystores for node " + walletNode);
                             },
                             LinkedHashMap::new));
 
@@ -1890,9 +1964,9 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
                 TransactionOutput spentTxo = inputTransaction.getOutputs().get((int)txInput.getOutpoint().getIndex());
 
                 Script signingScript = getSigningScript(txInput, spentTxo);
-                List<TransactionSignature> signatures = txInput.hasWitness() ? txInput.getWitness().getSignatures() : txInput.getScriptSig().getSignatures();
+                List<TransactionSignature> signatures = getSignatures(txInput, signingWallet.getScriptType());
                 Map<Byte, Sha256Hash> sigHashes = new HashMap<>();
-                byte[] sigHashPrefix = signingWallet.getSigHashPrefix(blockHeight);
+                byte[] sigHashPrefix = getSigHashPrefix(transaction, blockHeight);
 
                 for(ECKey sigPublicKey : keystoreKeysForNode.keySet()) {
                     for(TransactionSignature signature : signatures) {
@@ -1963,28 +2037,6 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
      */
     public Set<TransactionInput> getUnsignedInputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions, Map<Script, WalletNode> walletOutputScripts,
                                                    Integer blockHeight) {
-        return getUnsignedInputs(transaction, inputTransactions, walletOutputScripts, blockHeight, false);
-    }
-
-    /**
-     * Determines which inputs of a signed transaction spend this wallet's outputs and were checked and found without valid signatures from enough of
-     * its keystores. Unlike getUnsignedInputs, an input that could not be checked is not among them: one whose signature hash commits to a transaction
-     * not known, or one carrying a signature drongo cannot read (an encoding older chains accepted before strict DER, say). This is the finding to act
-     * on where the transaction is claimed to be mined, which it could not be with an input not validly signed.
-     *
-     * @param transaction The signed transaction
-     * @param inputTransactions Returns the transaction with the given txid, or null where it is not known
-     * @param walletOutputScripts This wallet's output scripts, as returned by getWalletOutputScripts()
-     * @param blockHeight The height of the block holding the transaction, or null, zero or below where it is unconfirmed
-     * @return The inputs spending this wallet's outputs shown not to be signed by it
-     */
-    public Set<TransactionInput> getInvalidlySignedInputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions, Map<Script, WalletNode> walletOutputScripts,
-                                                          Integer blockHeight) {
-        return getUnsignedInputs(transaction, inputTransactions, walletOutputScripts, blockHeight, true);
-    }
-
-    private Set<TransactionInput> getUnsignedInputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions, Map<Script, WalletNode> walletOutputScripts,
-                                                    Integer blockHeight, boolean definiteOnly) {
         Map<TransactionInput, WalletNode> signingNodes = getSigningNodes(transaction, inputTransactions, walletOutputScripts);
         Map<TransactionInput, Map<TransactionSignature, Keystore>> signedKeystores = getSignedKeystores(transaction, inputTransactions, signingNodes, blockHeight);
         Set<TransactionInput> unsignedInputs = new LinkedHashSet<>();
@@ -1992,9 +2044,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             Map<TransactionSignature, Keystore> signatures = signedKeystores.get(entry.getKey());
             int threshold = entry.getValue().getWallet().getDefaultPolicy().getNumSignaturesRequired();
             if(signatures == null || new HashSet<>(signatures.values()).size() < threshold) {
-                if(!definiteOnly || (signatures != null && !hasUnreadableSignature(entry.getKey()))) {
-                    unsignedInputs.add(entry.getKey());
-                }
+                unsignedInputs.add(entry.getKey());
             }
         }
 
@@ -2002,32 +2052,61 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     }
 
     /**
-     * Whether an input carries a push that is shaped as an ECDSA signature (a DER sequence) but cannot be decoded as one. Chains before strict DER
-     * (BIP66 and its ports) accepted encodings that a strict reader may refuse, so a signature of that kind proves nothing either way.
+     * The signatures an input of the given wallet script type carries, read only from the pushes where that type puts them, each by the kind of
+     * signature it must be: ECDSA for the legacy and segwit v0 types, read as consensus reads them (ECDSASignature.decodeFromDERLax), and Schnorr for
+     * a Taproot key path. A push that does not read as one is left out, as consensus treats it as no signature.
      */
-    public static boolean hasUnreadableSignature(TransactionInput txInput) {
+    static List<TransactionSignature> getSignatures(TransactionInput txInput, ScriptType scriptType) {
         List<byte[]> pushes = new ArrayList<>();
-        for(ScriptChunk chunk : txInput.getScriptSig().getChunks()) {
-            if(chunk.data != null) {
-                pushes.add(chunk.data);
-            }
-        }
-        if(txInput.hasWitness()) {
-            pushes.addAll(txInput.getWitness().getPushes());
-        }
-
-        for(byte[] push : pushes) {
-            //A DER sequence tag and at least the room for two integers and a sighash byte; pubkeys start 02, 03 or 04 and wallet scripts with an opcode
-            if(push.length >= 9 && push[0] == 0x30 && push.length != 64 && push.length != 65) {
-                try {
-                    TransactionSignature.decodeFromBitcoin(push, false);
-                } catch(Exception e) {
-                    return true;
+        List<ScriptChunk> chunks = txInput.getScriptSig().getChunks();
+        List<byte[]> witness = txInput.hasWitness() ? txInput.getWitness().getPushes() : List.of();
+        switch(scriptType) {
+            case P2PKH, P2PK -> {
+                //Where the output script finds it, whatever is pushed before: the second-to-last push (before the public key) for P2PKH, the last for P2PK
+                int index = chunks.size() - (scriptType == P2PKH ? 2 : 1);
+                if(index >= 0 && chunks.get(index).data != null) {
+                    pushes.add(chunks.get(index).data);
                 }
             }
+            case P2SH, MULTISIG -> {
+                //OP_0, the signatures, then (for P2SH) the redeem script
+                int end = scriptType == P2SH ? chunks.size() - 1 : chunks.size();
+                for(int i = 1; i < end; i++) {
+                    if(chunks.get(i).data != null) {
+                        pushes.add(chunks.get(i).data);
+                    }
+                }
+            }
+            case P2SH_P2WPKH, P2WPKH, P2TR -> {
+                if(!witness.isEmpty()) {
+                    pushes.add(witness.getFirst());
+                }
+            }
+            case P2SH_P2WSH, P2WSH -> {
+                //The dummy element, the signatures, then the witness script
+                for(int i = 1; i < witness.size() - 1; i++) {
+                    pushes.add(witness.get(i));
+                }
+            }
+            default -> {
+                return txInput.hasWitness() ? txInput.getWitness().getSignatures() : txInput.getScriptSig().getSignatures();
+            }
         }
 
-        return false;
+        List<TransactionSignature> signatures = new ArrayList<>();
+        TransactionSignature.Type type = scriptType == P2TR ? TransactionSignature.Type.SCHNORR : TransactionSignature.Type.ECDSA;
+        for(byte[] push : pushes) {
+            if(push.length == 0) {
+                continue;
+            }
+            try {
+                signatures.add(TransactionSignature.decodeFromBitcoin(type, push, false));
+            } catch(Exception e) {
+                //not a signature, as consensus would find
+            }
+        }
+
+        return signatures;
     }
 
     private List<TransactionOutput> getSpentOutputs(Transaction transaction, Function<Sha256Hash, Transaction> inputTransactions) {
@@ -2242,7 +2321,10 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
      * @return A map keyed with the PSBTInput mapped to a map of the signatures and associated keystores that signed it
      */
     public Map<PSBTInput, Map<TransactionSignature, Keystore>> getSignedKeystores(PSBT psbt) {
-        psbt.setSigHashPrefix(getSigHashPrefix());
+        //Shown, not signed: a PSBT marked for another coin keeps its own chain's rule
+        if(psbt.getCoin() == null || psbt.getCoin() == getCoin()) {
+            psbt.setSigHashPrefix(getSigHashPrefix());
+        }
         Map<PSBTInput, WalletNode> signingNodes = getSigningNodes(psbt);
         Map<PSBTInput, Map<TransactionSignature, Keystore>> signedKeystores = new LinkedHashMap<>();
 
@@ -2292,15 +2374,15 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             }
         }
 
-        psbt.setSigHashPrefix(getSigHashPrefix());
+        stampSigHashPrefix(psbt);
         sign(getSigningNodes(psbt));
     }
 
     public void sign(Map<PSBTInput, WalletNode> signingNodes) throws MnemonicException {
         for(Map.Entry<PSBTInput, WalletNode> signingEntry : signingNodes.entrySet()) {
             Wallet signingWallet = signingEntry.getValue().getWallet();
-            //The signature hash is the chain's, which this wallet knows, rather than Bitcoin's
-            signingEntry.getKey().getPsbt().setSigHashPrefix(signingWallet.getSigHashPrefix());
+            //The signature hash is the chain's, which this wallet knows, rather than Bitcoin's, and only for a PSBT of this wallet's coin
+            signingWallet.stampSigHashPrefix(signingEntry.getKey().getPsbt());
             for(Keystore keystore : signingWallet.getKeystores()) {
                 if(keystore.hasPrivateKey()) {
                     PSBTInput psbtInput = signingEntry.getKey();
@@ -2492,7 +2574,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     public void finalise(PSBT psbt) {
         //Signatures are taken as verified when finalising, which is only so where they were checked under this chain's signature hash. Where the chain
         //has its own (Luckycoin), check them again under it, so a signature made with Bitcoin's rule elsewhere is refused here rather than at broadcast
-        psbt.setSigHashPrefix(getSigHashPrefix());
+        stampSigHashPrefix(psbt);
         if(psbt.getSigHashPrefix().length > 0) {
             try {
                 psbt.verifySignatures();
@@ -2929,6 +3011,15 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
         copy.setLitVmLink(litVmLink == null ? null : litVmLink.copy());
         for(PendingMint pendingMint : pendingMints) {
             copy.getPendingMints().add(pendingMint.copy());
+        }
+        for(InscriptionCheck inscriptionCheck : inscriptionChecks) {
+            copy.getInscriptionChecks().add(inscriptionCheck.copy());
+        }
+        for(SwapEntry swapEntry : swapEntries) {
+            copy.getSwapEntries().add(swapEntry.copy());
+        }
+        for(MakerHistoryEntry makerHistoryEntry : makerHistory) {
+            copy.getMakerHistory().add(makerHistoryEntry.copy());
         }
         copy.walletTables.putAll(walletTables);
         copy.setStoredBlockHeight(getStoredBlockHeight());

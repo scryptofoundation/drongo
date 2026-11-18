@@ -9,8 +9,11 @@ package com.sparrowwallet.drongo.evm;
  * and verified, never by guessing, because the chain id is what binds a signature to its chain.
  */
 public enum LitVmNetwork {
-    LITEFORGE_TESTNET("LitVM LiteForge Testnet", 4441L, "https://liteforge.rpc.caldera.xyz/http",
-            "https://liteforge.explorer.caldera.xyz", "zkLTC", true),
+    //LitVM moved LiteForge from Caldera to Zeeve in November 2026. The Caldera RPC still answers reads but refuses
+    //sends ("publishing transactions not supported by this endpoint"), and its explorer API returns errors. These are
+    //the endpoints the official hub at testnet.litvm.com uses: the same chain (id 4441, same blocks and balances).
+    LITEFORGE_TESTNET("LitVM LiteForge Testnet", 4441L, "https://rpc.testnet.liteforge.zeeve.net/",
+            "https://explorer.testnet.liteforge.zeeve.net", "zkLTC", true),
     SEPOLIA("Ethereum Sepolia", 11155111L, "https://ethereum-sepolia-rpc.publicnode.com",
             "https://eth-sepolia.blockscout.com", "ETH", true),
     BASE_SEPOLIA("Base Sepolia", 84532L, "https://sepolia.base.org",

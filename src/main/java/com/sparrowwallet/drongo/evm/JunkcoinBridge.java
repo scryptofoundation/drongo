@@ -85,11 +85,11 @@ public final class JunkcoinBridge {
         try {
             String custody = Abi.decodeString(client.ethCall(BRIDGE, Abi.selector("jkcCustodyAddress()")));
             if(!CUSTODY_ADDRESS.equals(custody)) {
-                throw new IOException("Bridge reports custody address " + custody + ", expected " + CUSTODY_ADDRESS);
+                throw new LitVmCheckException(LitVmCheckException.Reason.BRIDGE_MISMATCH, "Bridge reports custody address " + custody + ", expected " + CUSTODY_ADDRESS);
             }
             EvmAddress token = Abi.decodeAddress(client.ethCall(BRIDGE, Abi.selector("wjkc()")), 0);
             if(!WJKC.contract().equals(token)) {
-                throw new IOException("Bridge reports token " + token + ", expected " + WJKC.contract());
+                throw new LitVmCheckException(LitVmCheckException.Reason.BRIDGE_MISMATCH, "Bridge reports token " + token + ", expected " + WJKC.contract());
             }
         } catch(IllegalArgumentException e) {
             throw new IOException("Invalid bridge response: " + e.getMessage());

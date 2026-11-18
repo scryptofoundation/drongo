@@ -22,7 +22,7 @@ import java.util.Optional;
  *
  * Throwaway TESTNET seed only. Opt-in: LITVM_E2E_SEED names a file holding BIP39 words (the Litecoin testnet
  * end-to-end wallet's seed works, so the account is that wallet's LitVM link). Fund the printed address with
- * zkLTC from the LiteForge faucet on Caldera Hub.
+ * zkLTC from the LiteForge faucet (faucet.testnet.liteforge.zeeve.net).
  */
 public class LitVmEndToEndLiveTest {
     private static final BigInteger SEND = Wei.gwei(100_000); //0.0001 zkLTC
@@ -40,7 +40,7 @@ public class LitVmEndToEndLiveTest {
         Assertions.assertEquals(link.getAddress(), sender.getAddress());
         EvmAccount recipient = EvmAccount.fromSeed(seed, 1);
 
-        LitVmRpcClient client = new LitVmRpcClient(LitVmNetwork.LITEFORGE_TESTNET);
+        LitVmRpcClient client = new LitVmRpcClient(LitVmNetwork.LITEFORGE_TESTNET, EvmTransport.direct());
         client.verifyChain();
         BigInteger balance = client.getBalance(sender.getAddress());
         System.out.println("LitVM link address " + sender.getAddress() + " balance " + Wei.format(balance) + " zkLTC");

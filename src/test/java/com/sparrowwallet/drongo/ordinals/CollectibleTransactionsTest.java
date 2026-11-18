@@ -224,6 +224,36 @@ public class CollectibleTransactionsTest {
     }
 
     @Test
+    public void doginalsChainTxMovesCollectibles() throws Exception {
+        useDogecoin();
+        ECKey key = ECKey.fromPrivate(BigInteger.valueOf(7));
+        byte[] body = new byte[5_000];
+        new Random(5).nextBytes(body);
+        DoginalsMint.Chain chain = new DoginalsMint.Chain("image/png", body, ECKey.fromPublicOnly(key), recipient, 1000, Coin.DOGECOIN);
+        Transaction tx0 = DoginalsMint.fund(wallet, chain, fund(200_000_000L), 1000).getTransaction();
+        Transaction step1 = DoginalsMint.step(chain, 1, new TransactionOutPoint(tx0.getTxId(), 0), tx0.getOutputs().getFirst().getValue(), key);
+        Transaction step2 = DoginalsMint.step(chain, 2, new TransactionOutPoint(step1.getTxId(), 0), step1.getOutputs().getFirst().getValue(), key);
+        Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, step1), "the first piece starts with ord");
+        Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, step2), "a later piece ends with the partial lock");
+
+        //Tx 0 looks plain; the pending record names it
+        Assertions.assertFalse(CollectibleTransactions.movesCollectibles(wallet, tx0));
+        wallet.getPendingMints().add(PendingMint.doginal("m/44'/3'/0'/0/1", new byte[32], tx0.getTxId(), chain.carriedValue(), "image/png", body, 1000,
+                recipient.toString()));
+        Assertions.assertTrue(CollectibleTransactions.movesCollectibles(wallet, tx0), "a pending Doginals mint's funding tx");
+    }
+
+    @Test
+    public void plainDogecoinSendDoesNotMoveCollectibles() throws Exception {
+        useDogecoin();
+        List<CollectibleTransactions.Pinned> utxos = fund(500_000_000L);
+        Transaction plain = new Transaction();
+        plain.addInput(utxos.getFirst().utxo().getHash(), utxos.getFirst().utxo().getIndex(), new Script(new byte[0]));
+        plain.addOutput(400_000_000L, recipient);
+        Assertions.assertFalse(CollectibleTransactions.movesCollectibles(wallet, plain));
+    }
+
+    @Test
     public void feeComesFromCandidatesLargestFirstAndChangeIsLast() throws Exception {
         List<CollectibleTransactions.Pinned> utxos = fund(10_000, 50_000, 100_000);
         WalletTransaction wtx = CollectibleTransactions.sendInscription(wallet, utxos.get(0), recipient, utxos.subList(1, 3), 2.0, 1.0);

@@ -49,16 +49,16 @@ public final class ZkLtcBridge {
     /** Throws unless the Sepolia inbox still points at the pinned bridge, and the bridge at the pinned zkLTC token. */
     public static void verifyBridge(LitVmRpcClient l1) throws IOException {
         if(l1.getNetwork() != L1) {
-            throw new IOException("The zkLTC bridge deposits from " + L1.getDisplayName());
+            throw new LitVmCheckException(LitVmCheckException.Reason.BRIDGE_MISMATCH, "The zkLTC bridge deposits from " + L1.getDisplayName());
         }
         try {
             EvmAddress bridge = Abi.decodeAddress(l1.ethCall(INBOX, Abi.selector("bridge()")), 0);
             if(!BRIDGE.equals(bridge)) {
-                throw new IOException("Inbox reports bridge " + bridge + ", expected " + BRIDGE);
+                throw new LitVmCheckException(LitVmCheckException.Reason.BRIDGE_MISMATCH, "Inbox reports bridge " + bridge + ", expected " + BRIDGE);
             }
             EvmAddress token = Abi.decodeAddress(l1.ethCall(BRIDGE, Abi.selector("nativeToken()")), 0);
             if(!ZKLTC_L1.contract().equals(token)) {
-                throw new IOException("Bridge reports native token " + token + ", expected " + ZKLTC_L1.contract());
+                throw new LitVmCheckException(LitVmCheckException.Reason.BRIDGE_MISMATCH, "Bridge reports native token " + token + ", expected " + ZKLTC_L1.contract());
             }
         } catch(IllegalArgumentException e) {
             throw new IOException("Invalid bridge response: " + e.getMessage());

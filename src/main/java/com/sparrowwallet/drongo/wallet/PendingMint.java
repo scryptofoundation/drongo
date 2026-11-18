@@ -13,9 +13,13 @@ import java.util.Map;
  * reveal from the seed and the original content, none of it secret: the taproot key's derivation path, the SHA-256 of
  * the reveal script (to check the content given to finish it), the commit outpoint and value, the content type, and
  * for an etch the etching itself. It never holds a key or a signed reveal.
+ *
+ * A Doginals mint (DOGINAL) is a chain of transactions broadcast in batches. Its record keeps the funding txid as the
+ * commit, the carried value as the commit value, and what rebuilds every later step: the content, the fee rate, the
+ * destination, and how many steps were broadcast (a hint only: the chain itself says which steps exist).
  */
 public class PendingMint extends Persistable {
-    public enum Kind { INSCRIPTION, ETCH }
+    public enum Kind { INSCRIPTION, ETCH, DOGINAL }
 
     private final Kind kind;
     private final String keyPath;
@@ -25,10 +29,25 @@ public class PendingMint extends Persistable {
     private final long commitValue;
     private final String contentType;
     private final Runestone.Etching etching;
+    private final byte[] content;
+    private final double feeRate;
+    private final String destination;
+    private final int stepsBroadcast;
 
     public PendingMint(Kind kind, String keyPath, byte[] scriptHash, Sha256Hash commitTxid, int commitVout, long commitValue, String contentType, Runestone.Etching etching) {
+        this(kind, keyPath, scriptHash, commitTxid, commitVout, commitValue, contentType, etching, null, 0, null, 0);
+    }
+
+    public PendingMint(Kind kind, String keyPath, byte[] scriptHash, Sha256Hash commitTxid, int commitVout, long commitValue, String contentType,
+                       Runestone.Etching etching, byte[] content, double feeRate, String destination, int stepsBroadcast) {
         if((kind == Kind.ETCH) != (etching != null)) {
             throw new IllegalArgumentException("An etch, and only an etch, has an etching");
+        }
+        if(kind == Kind.DOGINAL && (content == null || content.length == 0 || destination == null)) {
+            throw new IllegalArgumentException("A Doginals mint needs its content and destination");
+        }
+        if(kind != Kind.DOGINAL && content != null) {
+            throw new IllegalArgumentException("Only a Doginals mint keeps its content");
         }
         this.kind = kind;
         this.keyPath = keyPath;
@@ -38,6 +57,16 @@ public class PendingMint extends Persistable {
         this.commitValue = commitValue;
         this.contentType = contentType;
         this.etching = etching;
+        this.content = content == null ? null : content.clone();
+        this.feeRate = feeRate;
+        this.destination = destination;
+        this.stepsBroadcast = stepsBroadcast;
+    }
+
+    /** A Doginals mint whose funding tx is about to be broadcast: tx 0's output 0 carries the postage and every fee. */
+    public static PendingMint doginal(String keyPath, byte[] firstScriptHash, Sha256Hash fundingTxid, long carriedValue, String contentType,
+                                      byte[] content, double feeRate, String destination) {
+        return new PendingMint(Kind.DOGINAL, keyPath, firstScriptHash, fundingTxid, 0, carriedValue, contentType, null, content, feeRate, destination, 0);
     }
 
     public Kind getKind() {
@@ -72,8 +101,34 @@ public class PendingMint extends Persistable {
         return etching;
     }
 
+    public byte[] getContent() {
+        return content == null ? null : content.clone();
+    }
+
+    public double getFeeRate() {
+        return feeRate;
+    }
+
+    public String getDestination() {
+        return destination;
+    }
+
+    public int getStepsBroadcast() {
+        return stepsBroadcast;
+    }
+
+    /** The same Doginals record, saying the given number of steps were broadcast. */
+    public PendingMint withStepsBroadcast(int steps) {
+        if(kind != Kind.DOGINAL) {
+            throw new IllegalStateException("Only a Doginals mint has steps");
+        }
+        PendingMint copy = new PendingMint(kind, keyPath, scriptHash, commitTxid, commitVout, commitValue, contentType, etching, content, feeRate, destination, steps);
+        copy.setId(getId());
+        return copy;
+    }
+
     public PendingMint copy() {
-        PendingMint copy = new PendingMint(kind, keyPath, scriptHash, commitTxid, commitVout, commitValue, contentType, etching);
+        PendingMint copy = new PendingMint(kind, keyPath, scriptHash, commitTxid, commitVout, commitValue, contentType, etching, content, feeRate, destination, stepsBroadcast);
         copy.setId(getId());
         return copy;
     }

@@ -169,9 +169,10 @@ public class UnsignedInputsAllCoinsTest {
     }
 
     /**
-     * Before strict DER (BIP66 and its ports) chains accepted looser signature encodings, and they also accept high S values, so an old mined spend
-     * can carry either. drongo verifies those it can read, and one it cannot read is not a finding against a mined spend: the check that leaves a
-     * spend reported as mined out of the history (getInvalidlySignedInputs) keeps it, while an unconfirmed one is still left out (getUnsignedInputs).
+     * Before strict DER (BIP66 and its ports on Litecoin and Dogecoin) chains accepted looser signature encodings, and they accept high S values, so an
+     * old mined spend can carry either. drongo reads transaction signatures as consensus does (ECDSASignature.decodeFromDERLax, ported from Bitcoin
+     * Core's ecdsa_signature_parse_der_lax), so each of these verifies, mined or not. One consensus cannot read is no signature at all, and the spend
+     * is not shown signed, mined or not.
      */
     @Test
     public void looseSignatureEncodingsOfOlderChains() throws Exception {
@@ -192,35 +193,72 @@ public class UnsignedInputsAllCoinsTest {
                 signatures.add(ECDSASignature.decodeFromDER(Arrays.copyOf(slot, slot.length - 1)));
             }
 
-            //A length in long form, an integer with a needless zero byte, and a high S: all valid before BIP66 and BIP62, and all read and verified here
-            for(String variant : List.of("long form length", "padded R", "high S")) {
-                Transaction reencoded = editEachInput(signed, i -> {
-                    ECDSASignature ecdsa = signatures.get(i);
-                    BigInteger s = variant.equals("high S") ? ECKey.CURVE.getN().subtract(ecdsa.s) : ecdsa.s;
-                    return der(ecdsa.r, s, variant.equals("padded R"), variant.equals("long form length"));
-                });
-                Assertions.assertFalse(Wallet.hasUnreadableSignature(reencoded.getInputs().getFirst()), variant);
-                Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(reencoded, lookup, scripts, null), variant + ": unconfirmed, accepted");
-                Assertions.assertEquals(Set.of(), wallet.getInvalidlySignedInputs(reencoded, lookup, scripts, mined), variant + ": mined, accepted");
-            }
-
-            //An encoding drongo cannot read at all: unconfirmed it is left out, mined it is kept, since nothing shows it is not validly signed
-            Transaction unreadable = editEachInput(signed, i -> {
-                byte[] bytes = der(signatures.get(i).r, signatures.get(i).s, false, false);
+            Map<String, java.util.function.IntFunction<byte[]>> accepted = new LinkedHashMap<>();
+            accepted.put("long form sequence length", i -> encode(integer(signatures.get(i).r), integer(signatures.get(i).s), true, false, new byte[0]));
+            accepted.put("wrong sequence length", i -> {
+                byte[] bytes = encode(integer(signatures.get(i).r), integer(signatures.get(i).s), false, false, new byte[0]);
                 bytes[1] = (byte)0x7f;
                 return bytes;
             });
-            Assertions.assertTrue(Wallet.hasUnreadableSignature(unreadable.getInputs().getFirst()));
-            Assertions.assertEquals(2, wallet.getUnsignedInputs(unreadable, lookup, scripts, null).size(), "unconfirmed, left out");
-            Assertions.assertEquals(2, wallet.getUnsignedInputs(unreadable, lookup, scripts, mined).size(), "not shown to be signed");
-            Assertions.assertEquals(Set.of(), wallet.getInvalidlySignedInputs(unreadable, lookup, scripts, mined), "mined, no definite finding, kept");
+            accepted.put("padded R", i -> encode(Utils.concat(new byte[] {0, 0}, integer(signatures.get(i).r)), integer(signatures.get(i).s), false, false, new byte[0]));
+            accepted.put("unpadded R read as negative", i -> encode(unsigned(signatures.get(i).r), integer(signatures.get(i).s), false, false, new byte[0]));
+            accepted.put("long form integer lengths", i -> encode(integer(signatures.get(i).r), integer(signatures.get(i).s), false, true, new byte[0]));
+            accepted.put("garbage after S", i -> encode(integer(signatures.get(i).r), integer(signatures.get(i).s), false, false, new byte[] {1, 2, 3}));
+            accepted.put("high S", i -> encode(integer(signatures.get(i).r), integer(ECKey.CURVE.getN().subtract(signatures.get(i).s)), false, false, new byte[0]));
+            for(Map.Entry<String, java.util.function.IntFunction<byte[]>> variant : accepted.entrySet()) {
+                Transaction reencoded = editEachInput(signed, variant.getValue());
+                Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(reencoded, lookup, scripts, null), variant.getKey() + ": unconfirmed, accepted");
+                Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(reencoded, lookup, scripts, mined), variant.getKey() + ": mined, accepted");
+            }
 
-            //A readable signature that does not verify is a definite finding, mined or not
-            Transaction redirected = redirect(signed);
-            Assertions.assertEquals(2, wallet.getInvalidlySignedInputs(redirected, lookup, scripts, mined).size(), "mined forgery found");
+            //Not an integer where R should be: consensus finds no signature, so the spend is not shown signed, mined or not
+            Transaction unreadable = editEachInput(signed, i -> {
+                byte[] bytes = encode(integer(signatures.get(i).r), integer(signatures.get(i).s), false, false, new byte[0]);
+                bytes[2] = 0x03;
+                return bytes;
+            });
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(unreadable, lookup, scripts, null).size(), "unconfirmed, left out");
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(unreadable, lookup, scripts, mined).size(), "mined, left out");
+
+            //A readable signature over other outputs is not signed either
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(redirect(signed), lookup, scripts, mined).size(), "mined forgery left out");
         } finally {
             Coin.endScope(scope);
         }
+    }
+
+    /** An integer as DER has it: two's complement, a zero byte before a high bit */
+    private static byte[] integer(BigInteger value) {
+        return value.toByteArray();
+    }
+
+    /** An integer's magnitude without the zero byte DER needs before a high bit, which strict DER reads as negative */
+    private static byte[] unsigned(BigInteger value) {
+        byte[] bytes = value.toByteArray();
+        return bytes.length > 1 && bytes[0] == 0 ? Arrays.copyOfRange(bytes, 1, bytes.length) : bytes;
+    }
+
+    /** A signature with SIGHASH_ALL, built byte by byte in the encoding asked for */
+    private static byte[] encode(byte[] r, byte[] s, boolean longFormSequence, boolean longFormIntegers, byte[] garbage) {
+        java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+        for(byte[] value : List.of(r, s)) {
+            body.write(0x02);
+            if(longFormIntegers) {
+                body.write(0x81);
+            }
+            body.write(value.length);
+            body.writeBytes(value);
+        }
+        body.writeBytes(garbage);
+        java.io.ByteArrayOutputStream sequence = new java.io.ByteArrayOutputStream();
+        sequence.write(0x30);
+        if(longFormSequence) {
+            sequence.write(0x81);
+        }
+        sequence.write(body.size());
+        sequence.writeBytes(body.toByteArray());
+        sequence.write(SigHash.ALL.value);
+        return sequence.toByteArray();
     }
 
     /**
@@ -243,37 +281,92 @@ public class UnsignedInputsAllCoinsTest {
         }
     }
 
+    /**
+     * Consensus reads a P2PKH input's signature from the second-to-last push of its script sig and a P2PK input's from the last, whatever comes before:
+     * anyone relaying or mining a spend can put a push in front and it stays valid. A push after the public key moves the signature out of its place,
+     * and the spend is not valid.
+     */
+    @Test
+    public void legacySignaturesAreReadWhereConsensusReadsThem() throws Exception {
+        Coin scope = Coin.beginScope(Coin.DOGECOIN);
+        try {
+            Wallet wallet = buildWallet(Coin.DOGECOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+            fund(wallet, 0);
+            fund(wallet, 1);
+            Transaction signed = signedSpend(wallet);
+            Function<Sha256Hash, Transaction> lookup = txid -> body(wallet, txid);
+            Map<Script, WalletNode> scripts = wallet.getWalletOutputScripts();
+            ScriptChunk extra = ScriptChunk.fromData(new byte[] {1, 2, 3});
+
+            Transaction prepended = editEachScriptSig(signed, chunks -> {
+                List<ScriptChunk> edited = new ArrayList<>(List.of(extra));
+                edited.addAll(chunks);
+                return edited;
+            });
+            Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(prepended, lookup, scripts, null), "push in front, unconfirmed");
+            Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(prepended, lookup, scripts, 2_000_000), "push in front, mined");
+
+            Transaction appended = editEachScriptSig(signed, chunks -> {
+                List<ScriptChunk> edited = new ArrayList<>(chunks);
+                edited.add(extra);
+                return edited;
+            });
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(appended, lookup, scripts, null).size(), "push after the key");
+
+            byte[] signature = signed.getInputs().getFirst().getScriptSig().getChunks().getFirst().data;
+            Transaction p2pk = new Transaction();
+            p2pk.addInput(Sha256Hash.of(new byte[] {5}), 0, new Script(List.of(extra, ScriptChunk.fromData(signature))));
+            p2pk.addInput(Sha256Hash.of(new byte[] {6}), 0, new Script(List.of(ScriptChunk.fromData(signature), extra)));
+            List<TransactionSignature> read = Wallet.getSignatures(p2pk.getInputs().getFirst(), ScriptType.P2PK);
+            Assertions.assertEquals(1, read.size(), "P2PK, push in front");
+            Assertions.assertArrayEquals(signature, read.getFirst().encodeToBitcoin(), "P2PK, push in front");
+            Assertions.assertEquals(List.of(), Wallet.getSignatures(p2pk.getInputs().get(1), ScriptType.P2PK), "P2PK, push after the signature");
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    /**
+     * A Taproot signature of 65 bytes names its sighash type in the last byte, and consensus refuses 0x00 there (SIGHASH_DEFAULT is only ever the
+     * 64 byte form), so an honest key path signature with 0x00 appended is no signature
+     */
+    @Test
+    public void taprootSignatureWithAnExplicitDefaultSighashIsNoSignature() throws Exception {
+        Coin scope = Coin.beginScope(Coin.LITECOIN);
+        try {
+            Wallet wallet = buildWallet(Coin.LITECOIN, PolicyType.SINGLE_HD, ScriptType.P2TR);
+            fund(wallet, 0);
+            fund(wallet, 1);
+            Transaction signed = signedSpend(wallet);
+            byte[] honest = signatureSlots(signed.getInputs().getFirst(), ScriptType.P2TR).getFirst();
+            Assertions.assertEquals(64, honest.length);
+            Assertions.assertThrows(IllegalArgumentException.class, () -> TransactionSignature.decodeFromBitcoin(TransactionSignature.Type.SCHNORR,
+                    Arrays.copyOf(honest, 65), false));
+
+            Transaction explicitDefault = editSignatures(signed, ScriptType.P2TR, sigs -> sigs.stream().map(sig -> Arrays.copyOf(sig, 65)).toList());
+            Function<Sha256Hash, Transaction> lookup = txid -> body(wallet, txid);
+            Map<Script, WalletNode> scripts = wallet.getWalletOutputScripts();
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(explicitDefault, lookup, scripts, null).size(), "unconfirmed");
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(explicitDefault, lookup, scripts, HEIGHT + 1).size(), "mined");
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    private static Transaction editEachScriptSig(Transaction transaction, java.util.function.UnaryOperator<List<ScriptChunk>> edit) {
+        Transaction edited = new Transaction(transaction.bitcoinSerialize());
+        for(TransactionInput input : edited.getInputs()) {
+            input.setScriptBytes(new Script(edit.apply(input.getScriptSig().getChunks())).getProgram());
+        }
+        return new Transaction(edited.bitcoinSerialize());
+    }
+
     private static Transaction editEachInput(Transaction transaction, java.util.function.IntFunction<byte[]> signature) {
         Transaction edited = new Transaction(transaction.bitcoinSerialize());
         for(int i = 0; i < edited.getInputs().size(); i++) {
             setSignatureSlots(edited, i, ScriptType.P2PKH, List.of(signature.apply(i)), null);
         }
         return new Transaction(edited.bitcoinSerialize());
-    }
-
-    /** A signature with SIGHASH_ALL in the encoding asked for, built here byte by byte */
-    private static byte[] der(BigInteger r, BigInteger s, boolean padR, boolean longFormLength) {
-        byte[] rBytes = r.toByteArray();
-        if(padR) {
-            rBytes = Utils.concat(new byte[] {0}, rBytes);
-        }
-        byte[] sBytes = s.toByteArray();
-        java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
-        body.write(0x02);
-        body.write(rBytes.length);
-        body.writeBytes(rBytes);
-        body.write(0x02);
-        body.write(sBytes.length);
-        body.writeBytes(sBytes);
-        java.io.ByteArrayOutputStream sequence = new java.io.ByteArrayOutputStream();
-        sequence.write(0x30);
-        if(longFormLength) {
-            sequence.write(0x81);
-        }
-        sequence.write(body.size());
-        sequence.writeBytes(body.toByteArray());
-        sequence.write(SigHash.ALL.value);
-        return sequence.toByteArray();
     }
 
     private static void assertAccepted(Wallet wallet, Transaction transaction, String message) {

@@ -162,8 +162,20 @@ public class TransactionTest {
 
         ECKey pubKey = ECKey.fromPublicOnly(Utils.hexToBytes("025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee6357"));
         Sha256Hash hash = transaction.hashForWitnessSignature(1, ScriptType.P2PKH.getOutputScript(pubKey.getPubKeyHash()),600000000L, SigHash.ALL);
-        TransactionSignature signature = TransactionSignature.decodeFromBitcoin(Utils.hexToBytes("304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee"), false);
+        //The BIP143 example signature, with the SIGHASH_ALL byte it carries in its witness (the hash above is for SIGHASH_ALL)
+        TransactionSignature signature = TransactionSignature.decodeFromBitcoin(Utils.hexToBytes("304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee01"), false);
         Assertions.assertTrue(pubKey.verify(hash, signature));
+    }
+
+    /**
+     * A transaction signature is DER with its sighash byte after it, which is how every transaction carries one: DER alone is no signature, as consensus
+     * reads it
+     */
+    @Test
+    public void signatureWithoutItsSighashByteIsNotRead() throws Exception {
+        String der = "304402203609e17b84f6a7d30c80bfa610b5b4542f32a8a0d5447a12fb1366d7f01cc44a0220573a954c4518331561406f90300e8f3358f51928d43c212a8caed02de67eebee";
+        Assertions.assertThrows(SignatureDecodeException.class, () -> TransactionSignature.decodeFromBitcoin(Utils.hexToBytes(der), false));
+        Assertions.assertEquals(SigHash.ALL.value, TransactionSignature.decodeFromBitcoin(Utils.hexToBytes(der + "01"), false).sighashFlags);
     }
 
     @Test

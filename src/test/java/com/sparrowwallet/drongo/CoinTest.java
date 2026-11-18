@@ -147,6 +147,30 @@ public class CoinTest {
         }
     }
 
+    /**
+     * Bellscoin's testnet Taproot window closed on 2024-12-25 before our private testnet chain was mined, and Bells Core
+     * takes activation overrides on regtest only, so Taproot never activates there: a Taproot output on that chain would
+     * be anyone-can-spend. Mainnet (active from 191520) and regtest (always active) keep it.
+     */
+    @Test
+    public void bellscoinTestnetHasNoTaproot() {
+        Assertions.assertTrue(Coin.BELLSCOIN.isTaprootSupported(Network.MAINNET));
+        Assertions.assertFalse(Coin.BELLSCOIN.isTaprootSupported(Network.TESTNET));
+        Assertions.assertTrue(Coin.BELLSCOIN.isTaprootSupported(Network.REGTEST));
+        Assertions.assertTrue(Coin.LITECOIN.isTaprootSupported(Network.TESTNET));
+
+        Network previous = Network.get();
+        Network.set(Network.TESTNET);
+        try {
+            Assertions.assertFalse(Coin.BELLSCOIN.isTaprootSupported());
+            Assertions.assertFalse(Coin.BELLSCOIN.supports(ScriptType.P2TR));
+            Assertions.assertTrue(Coin.BELLSCOIN.supports(ScriptType.P2WPKH));
+            Assertions.assertTrue(Coin.LITECOIN.supports(ScriptType.P2TR));
+        } finally {
+            Network.set(previous);
+        }
+    }
+
     private static int versionByteOf(Address address) {
         return Byte.toUnsignedInt(Base58.decodeChecked(address.toString())[0]);
     }
@@ -609,7 +633,11 @@ public class CoinTest {
         Assertions.assertEquals(30, Coin.BELLSCOIN.getCoinbaseMaturity(Network.MAINNET, 1));
         Assertions.assertEquals(30, Coin.DINGOCOIN.getCoinbaseMaturity(Network.TESTNET, 4999));
         Assertions.assertEquals(240, Coin.DINGOCOIN.getCoinbaseMaturity(Network.TESTNET, 5000));
-        Assertions.assertEquals(100, Coin.PEPECOIN.getCoinbaseMaturity(Network.MAINNET, 1), "unverified coins keep 100");
+        Assertions.assertEquals(30, Coin.PEPECOIN.getCoinbaseMaturity(Network.MAINNET, 999));
+        Assertions.assertEquals(240, Coin.PEPECOIN.getCoinbaseMaturity(Network.MAINNET, 1000));
+        Assertions.assertEquals(30, Coin.PEPECOIN.getCoinbaseMaturity(Network.TESTNET, 15));
+        Assertions.assertEquals(240, Coin.PEPECOIN.getCoinbaseMaturity(Network.TESTNET, 1000));
+        Assertions.assertEquals(60, Coin.PEPECOIN.getCoinbaseMaturity(Network.REGTEST, 1000));
     }
 
     @Test

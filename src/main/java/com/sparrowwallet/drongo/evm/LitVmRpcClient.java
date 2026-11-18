@@ -4,9 +4,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import com.sparrowwallet.drongo.Utils;
 
 import java.time.Duration;
@@ -15,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 
 /**
  * JSON-RPC client for a LitVM network, covering what a simple wallet needs: balance, nonce, fees, gas
@@ -22,22 +20,65 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * Fail-closed on the chain: {@link #verifyChain()} must pass before anything is broadcast, so a mistyped or
  * hijacked RPC URL serving another chain is refused rather than trusted.
+ *
+ * Every request goes through the {@link EvmTransport} the client is made with: it has no way of its own to a server.
  */
 public final class LitVmRpcClient {
     private final LitVmNetwork network;
     private final URI endpoint;
-    private final HttpClient http;
+    private final EvmTransport transport;
     private final AtomicLong ids = new AtomicLong();
     private volatile boolean chainVerified;
+    //A client with a deadline sends through its parent; the plain client has neither
+    private final LitVmRpcClient parent;
+    private final long deadline;
+    private final LongSupplier clock;
 
-    public LitVmRpcClient(LitVmNetwork network) {
-        this(network, network.getRpcUrl());
+    /** The longest one call waits for its response, after the connection (at most {@link #CONNECT_TIMEOUT}) is made. */
+    public static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    public static final Duration CONNECT_TIMEOUT = EvmTransport.CONNECT_TIMEOUT;
+
+    public LitVmRpcClient(LitVmNetwork network, EvmTransport transport) {
+        this(network, network.getRpcUrl(), transport);
     }
 
-    public LitVmRpcClient(LitVmNetwork network, String rpcUrl) {
+    public LitVmRpcClient(LitVmNetwork network, String rpcUrl, EvmTransport transport) {
         this.network = network;
         this.endpoint = URI.create(rpcUrl);
-        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+        this.transport = java.util.Objects.requireNonNull(transport, "transport");
+        this.parent = null;
+        this.deadline = 0;
+        this.clock = null;
+    }
+
+    private LitVmRpcClient(LitVmRpcClient parent, long deadline, LongSupplier clock) {
+        this.network = parent.network;
+        this.endpoint = parent.endpoint;
+        this.transport = parent.transport;
+        this.chainVerified = parent.chainVerified;
+        this.parent = parent;
+        this.deadline = deadline;
+        this.clock = clock;
+    }
+
+    /**
+     * This client with a time budget: no call starts once the budget is spent (it throws {@link DeadlineException}),
+     * and a call's timeout is cut to the time left. The JDK client applies a request's timeout to connecting as well
+     * (a call with nanoseconds left fails to connect), so a call ends by the deadline; at worst, on a client that did
+     * not, it would overrun by one {@link #CONNECT_TIMEOUT}. A budget inside another keeps the earlier deadline.
+     */
+    public LitVmRpcClient withDeadline(Duration budget) {
+        return until(System.nanoTime() + budget.toNanos(), System::nanoTime);
+    }
+
+    /** As {@link #withDeadline}, against the given clock: no call starts once clock reads deadline or later. */
+    LitVmRpcClient until(long deadline, LongSupplier clock) {
+        return new LitVmRpcClient(this, deadline, clock);
+    }
+
+    /** The response timeout for a call with this many nanoseconds left. */
+    static Duration timeoutWithin(long nanosLeft) {
+        return nanosLeft >= REQUEST_TIMEOUT.toNanos() ? REQUEST_TIMEOUT : Duration.ofNanos(nanosLeft);
     }
 
     public LitVmNetwork getNetwork() {
@@ -45,7 +86,11 @@ public final class LitVmRpcClient {
     }
 
     public long chainId() throws IOException {
-        return quantity(call("eth_chainId", "[]")).longValueExact();
+        try {
+            return answer("eth_chainId", call("eth_chainId", "[]")).longValueExact();
+        } catch(ArithmeticException e) {
+            throw new MalformedAnswerException("eth_chainId returned an invalid answer", e);
+        }
     }
 
     /** Throws unless the endpoint reports this network's chain id. */
@@ -58,12 +103,12 @@ public final class LitVmRpcClient {
     }
 
     public BigInteger getBalance(EvmAddress address) throws IOException {
-        return quantity(call("eth_getBalance", "[\"" + address + "\",\"latest\"]"));
+        return answer("eth_getBalance", call("eth_getBalance", "[\"" + address + "\",\"latest\"]"));
     }
 
     /** The next nonce, counting transactions still in the mempool. */
     public BigInteger getPendingNonce(EvmAddress address) throws IOException {
-        return quantity(call("eth_getTransactionCount", "[\"" + address + "\",\"pending\"]"));
+        return answer("eth_getTransactionCount", call("eth_getTransactionCount", "[\"" + address + "\",\"pending\"]"));
     }
 
     /** The latest block's base fee, or the legacy gas price on a node that does not report one. */
@@ -71,9 +116,9 @@ public final class LitVmRpcClient {
     public BigInteger getBaseFee() throws IOException {
         Object block = call("eth_getBlockByNumber", "[\"latest\",false]");
         if(block instanceof Map<?, ?> map && map.get("baseFeePerGas") != null) {
-            return quantity(map.get("baseFeePerGas"));
+            return answer("eth_getBlockByNumber", map.get("baseFeePerGas"));
         }
-        return quantity(call("eth_gasPrice", "[]"));
+        return answer("eth_gasPrice", call("eth_gasPrice", "[]"));
     }
 
     /** The suggested priority fee; LitVM, like other Nitro rollups, generally needs none, so errors mean zero. */
@@ -95,7 +140,7 @@ public final class LitVmRpcClient {
             tx.append(",\"data\":\"0x").append(com.sparrowwallet.drongo.Utils.bytesToHex(data)).append("\"");
         }
         tx.append("}");
-        return quantity(call("eth_estimateGas", "[" + tx + "]"));
+        return answer("eth_estimateGas", call("eth_estimateGas", "[" + tx + "]"));
     }
 
     /** A ready-to-sign plain transfer with fees taken from the chain: maxFee = 2 x baseFee + priority fee. */
@@ -110,11 +155,38 @@ public final class LitVmRpcClient {
 
     /** eth_call against the latest block: the raw return data of a read-only contract call. */
     public byte[] ethCall(EvmAddress to, byte[] data) throws IOException {
+        return ethCallHex(to, data, MAX_CALL_RESULT_HEX);
+    }
+
+    /**
+     * As {@link #ethCall(EvmAddress, byte[])}, with a caller-chosen cap on the result of at most
+     * {@link #MAX_BOUNDED_CALL_RESULT_BYTES}, for a call whose answer can be larger than a few words (an NFT's
+     * tokenURI). The contract chooses its answer, so the outcomes are kept apart: a revert is a
+     * {@link LitVmRpcException} whose {@link LitVmRpcException#isRevert()} is true, an answer over the cap is an
+     * {@link OversizedResultException}, and anything else (the network, HTTP, a malformed response, another node
+     * error) is a plain IOException or a LitVmRpcException that is not a revert.
+     */
+    public byte[] ethCall(EvmAddress to, byte[] data, int maxResultBytes) throws IOException {
+        if(maxResultBytes < 0 || maxResultBytes > MAX_BOUNDED_CALL_RESULT_BYTES) {
+            throw new IllegalArgumentException("eth_call result cap out of range: " + maxResultBytes);
+        }
+        try {
+            return ethCallHex(to, data, 2 + 2 * maxResultBytes);
+        } catch(IllegalArgumentException | com.sparrowwallet.drongo.protocol.ProtocolException e) {
+            //A response that is not JSON-RPC (MiniJson), or a result that is not hex (Utils.hexToBytes), is the endpoint's fault
+            throw new IOException("eth_call returned an invalid response", e);
+        }
+    }
+
+    private byte[] ethCallHex(EvmAddress to, byte[] data, int maxHex) throws IOException {
         Object result = call("eth_call", "[{\"to\":\"" + to + "\",\"data\":\"0x" + com.sparrowwallet.drongo.Utils.bytesToHex(data) + "\"},\"latest\"]");
-        if(!(result instanceof String hex) || !hex.startsWith("0x") || hex.length() % 2 != 0 || hex.length() > MAX_CALL_RESULT_HEX) {
+        if(!(result instanceof String hex) || !hex.startsWith("0x") || hex.length() % 2 != 0) {
             throw new IOException("eth_call returned an invalid result");
         }
-        return com.sparrowwallet.drongo.Utils.hexToBytes(hex.substring(2));
+        if(hex.length() > maxHex) {
+            throw new OversizedResultException("eth_call returned an invalid result");
+        }
+        return hexAnswer("eth_call", hex);
     }
 
     /** Whether the address holds contract code at the latest block. */
@@ -126,18 +198,18 @@ public final class LitVmRpcClient {
     /** Reads an ERC-20 contract's metadata; fails if the address holds no contract or does not answer decimals(). */
     public Erc20Token readToken(EvmAddress contract) throws IOException {
         if(!hasCode(contract)) {
-            throw new IOException("No contract at " + contract);
+            throw new LitVmCheckException(LitVmCheckException.Reason.NO_CONTRACT, "No contract at " + contract);
         }
         try {
             BigInteger decimals = Abi.decodeUint(ethCall(contract, Abi.selector("decimals()")), 0);
             if(decimals.compareTo(BigInteger.valueOf(Erc20Token.MAX_DECIMALS)) > 0) {
-                throw new IOException("Token decimals out of range: " + decimals);
+                throw new LitVmCheckException(LitVmCheckException.Reason.TOKEN_DECIMALS, "Token decimals out of range: " + decimals);
             }
             String symbol = optionalString(contract, "symbol()");
             String name = optionalString(contract, "name()");
             return new Erc20Token(contract, symbol, name, decimals.intValue());
         } catch(IllegalArgumentException e) {
-            throw new IOException(contract + " is not an ERC-20 token: " + e.getMessage());
+            throw new LitVmCheckException(LitVmCheckException.Reason.NOT_A_TOKEN, contract + " is not an ERC-20 token: " + e.getMessage());
         }
     }
 
@@ -185,8 +257,11 @@ public final class LitVmRpcClient {
             gasLimit = gasLimit.min(maxGas);
         }
         if(gasLimit.compareTo(maxGas) > 0) {
-            throw new IOException(to == null ? "Deploying this needs " + gas + " gas on " + network.getDisplayName() + ", above the " + maxGas
-                    + " a transaction can use. Choose fewer features, or another network." : "Node estimated " + gas + " gas, above the " + maxGas + " limit");
+            if(to == null) {
+                throw new LitVmCheckException(LitVmCheckException.Reason.CREATION_OVER_GAS_CAP, "Deploying this needs " + gas + " gas on " + network.getDisplayName()
+                        + ", above the " + maxGas + " a transaction can use. Choose fewer features, or another network.");
+            }
+            throw new IOException("Node estimated " + gas + " gas, above the " + maxGas + " limit");
         }
         if(maxFee.compareTo(MAX_FEE_PER_GAS) > 0 || priority.compareTo(maxFee) > 0) {
             throw new IOException("Node reported an implausible fee (max " + maxFee + " wei/gas, priority " + priority + ")");
@@ -197,9 +272,20 @@ public final class LitVmRpcClient {
     /** Broadcasts a signed transaction and returns its hash. Requires a prior successful {@link #verifyChain()}. */
     public String sendRawTransaction(Eip1559Transaction.Signed signed) throws IOException {
         if(!chainVerified) {
-            verifyChain();
+            try {
+                verifyChain();
+            } catch(IOException e) {
+                //The chain check comes first, and it failed: the transaction was not handed to anyone
+                throw new EvmTransport.NotSentException("The chain could not be verified, so the transaction was not sent", e);
+            }
         }
-        Object result = call("eth_sendRawTransaction", "[\"" + signed.rawHex() + "\"]");
+        Object result;
+        try {
+            result = call("eth_sendRawTransaction", "[\"" + signed.rawHex() + "\"]");
+        } catch(DeadlineException e) {
+            //Thrown only before a request is made: the time was spent, so none was
+            throw new EvmTransport.NotSentException("Out of time before the transaction was sent", e);
+        }
         //The hash is ours to compute: a node reporting a different one is wrong or lying, and its value would then be
         //what the user tracks. Return the local hash, and refuse a mismatch rather than trusting either silently.
         String local = signed.hashHex();
@@ -211,14 +297,32 @@ public final class LitVmRpcClient {
 
     public record Receipt(boolean success, BigInteger blockNumber, BigInteger gasUsed) {}
 
-    /** The receipt once the transaction is mined; empty while it is pending. */
+    /**
+     * The receipt once the transaction is mined; empty while it is pending (the node answers null). A receipt is taken
+     * only when it is for the transaction asked about (its transactionHash), says exactly 0x1 (succeeded) or 0x0
+     * (failed) and names its block; anything else is a {@link MalformedAnswerException}, never a failed transaction.
+     * A node can still lie in a well-formed receipt: what a caller does on one is its own to weigh.
+     */
     public Optional<Receipt> getReceipt(String txHash) throws IOException {
         Object result = call("eth_getTransactionReceipt", "[\"" + txHash + "\"]");
-        if(!(result instanceof Map<?, ?> map)) {
+        if(result == null) {
             return Optional.empty();
         }
-        boolean success = "0x1".equals(map.get("status"));
-        return Optional.of(new Receipt(success, quantity(map.get("blockNumber")), quantity(map.get("gasUsed"))));
+        if(!(result instanceof Map<?, ?> map)) {
+            throw new MalformedAnswerException("eth_getTransactionReceipt returned an invalid answer", null);
+        }
+        if(!(map.get("transactionHash") instanceof String reported) || !reported.equalsIgnoreCase(txHash)) {
+            throw new MalformedAnswerException("eth_getTransactionReceipt returned a receipt for another transaction", null);
+        }
+        boolean success;
+        if("0x1".equals(map.get("status"))) {
+            success = true;
+        } else if("0x0".equals(map.get("status"))) {
+            success = false;
+        } else {
+            throw new MalformedAnswerException("eth_getTransactionReceipt returned a receipt with no valid status", null);
+        }
+        return Optional.of(new Receipt(success, answer("eth_getTransactionReceipt", map.get("blockNumber")), answer("eth_getTransactionReceipt", map.get("gasUsed"))));
     }
 
     /** eth_call from a given sender carrying a value: simulates a transaction without sending it. */
@@ -230,7 +334,7 @@ public final class LitVmRpcClient {
         if(!(result instanceof String hex) || !hex.startsWith("0x") || hex.length() % 2 != 0 || hex.length() > max) {
             throw new IOException("eth_call returned an invalid result");
         }
-        return Utils.hexToBytes(hex.substring(2));
+        return hexAnswer("eth_call", hex);
     }
 
     private static final EvmAddress GAS_PRICE_ORACLE = EvmAddress.fromString("0x420000000000000000000000000000000000000F");
@@ -275,6 +379,14 @@ public final class LitVmRpcClient {
     }
 
     private static List<Log> parseLogs(Object logs) throws IOException {
+        try {
+            return parseLogsUnchecked(logs);
+        } catch(IllegalArgumentException | com.sparrowwallet.drongo.protocol.ProtocolException e) {
+            throw new MalformedAnswerException("Invalid log in response", e);
+        }
+    }
+
+    private static List<Log> parseLogsUnchecked(Object logs) throws IOException {
         if(!(logs instanceof List<?> list)) {
             throw new IOException("Invalid logs in response");
         }
@@ -304,42 +416,68 @@ public final class LitVmRpcClient {
         if(!(result instanceof Map<?, ?> map) || !(map.get("sendRoot") instanceof String root) || !root.matches("0x[0-9a-fA-F]{64}")) {
             throw new IOException("Block " + Utils.bytesToHex(blockHash) + " not found or has no outbox state");
         }
-        return new ArbBlock(quantity(map.get("number")), quantity(map.get("sendCount")), Utils.hexToBytes(root.substring(2)));
+        return new ArbBlock(answer("eth_getBlockByHash", map.get("number")), answer("eth_getBlockByHash", map.get("sendCount")), Utils.hexToBytes(root.substring(2)));
     }
 
     private Object call(String method, String paramsJson) throws IOException {
+        return call(method, paramsJson, REQUEST_TIMEOUT);
+    }
+
+    private Object call(String method, String paramsJson, Duration timeout) throws IOException {
+        if(parent != null) {
+            long left = deadline - clock.getAsLong();
+            if(left <= 0) {
+                throw new DeadlineException(method + " not sent: out of time");
+            }
+            Duration within = timeoutWithin(left);
+            return parent.call(method, paramsJson, within.compareTo(timeout) < 0 ? within : timeout);
+        }
         long id = ids.incrementAndGet();
         String body = "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"method\":\"" + method + "\",\"params\":" + paramsJson + "}";
-        HttpRequest request = HttpRequest.newBuilder(endpoint)
-                .timeout(Duration.ofSeconds(30))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        HttpResponse<String> response;
-        try {
-            response = http.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch(InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted calling " + method, e);
+        //The transport's own cap is in bytes: at most four to a character, so it never cuts below the cap that follows
+        EvmTransport.Response response = transport.send(endpoint, Map.of("Content-Type", "application/json"), body.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                timeout, 4 * MAX_RESPONSE_CHARS);
+        if(response.status() == 429) {
+            throw new RateLimitedException(method + " failed with HTTP " + response.status());
         }
-        if(response.statusCode() / 100 != 2) {
-            throw new IOException(method + " failed with HTTP " + response.statusCode());
+        if(response.status() / 100 != 2) {
+            throw new IOException(method + " failed with HTTP " + response.status());
         }
-        //None of the calls made here return more than a receipt; anything far larger is not a real answer
+        //None of the calls made here return more than a receipt or a 100,000-byte eth_call result (200,002 hex
+        //characters); a whole response far larger is a failure of the transport, for every method. Only a result over
+        //the caller's cap, inside a response of a sane size, is the contract's answer (OversizedResultException)
         if(response.body().length() > MAX_RESPONSE_CHARS) {
             throw new IOException(method + " returned an oversized response");
         }
-        Object parsed = MiniJson.parse(response.body());
+        Object parsed;
+        try {
+            parsed = MiniJson.parse(response.body());
+        } catch(RuntimeException e) {
+            //An answer that is not JSON is the endpoint's fault, never the caller's
+            throw new MalformedAnswerException(method + " returned a response that is not JSON", e);
+        }
         if(!(parsed instanceof Map<?, ?> map)) {
             throw new IOException(method + " returned a non-object response");
         }
         if(map.get("error") instanceof Map<?, ?> error) {
-            throw new LitVmRpcException(String.valueOf(error.get("message")));
+            String message = String.valueOf(error.get("message"));
+            throw new LitVmRpcException(message, isRevert(error.get("code"), message));
         }
         return map.get("result");
     }
 
+    /**
+     * Whether a node error is the called contract reverting: geth and Nitro report a revert with data as code 3, and
+     * one without data as -32000 "execution reverted". Kept narrow on purpose: any other error (a rate limit, a node
+     * fault) must not read as the contract's answer.
+     */
+    private static boolean isRevert(Object code, String message) {
+        return (code instanceof BigDecimal number && number.compareTo(BigDecimal.valueOf(3)) == 0) || message.startsWith("execution reverted");
+    }
+
     private static final int MAX_RESPONSE_CHARS = 1_000_000;
+    /** The largest result {@link #ethCall(EvmAddress, byte[], int)} accepts. */
+    public static final int MAX_BOUNDED_CALL_RESULT_BYTES = 100_000;
     //Upper bounds for a plain value transfer; LiteForge measured ~1.1 gwei base fee and well under 1M gas
     private static final BigInteger MAX_TRANSFER_GAS = BigInteger.valueOf(2_000_000);
     //Ethereum's per-transaction gas cap (EIP-7825). The largest token template needs about 2.7M on LiteForge and Base
@@ -362,13 +500,77 @@ public final class LitVmRpcClient {
         throw new IllegalArgumentException("Not a JSON-RPC quantity: " + value);
     }
 
+    /** A quantity in a node's answer: one that is not a quantity is the node's fault, so an IOException. */
+    private static BigInteger answer(String method, Object value) throws IOException {
+        try {
+            return quantity(value);
+        } catch(IllegalArgumentException e) {
+            throw new MalformedAnswerException(method + " returned an invalid answer", e);
+        }
+    }
+
+    /** Hex data in a node's answer, after its 0x: characters that are not hex are the node's fault, so an IOException. */
+    private static byte[] hexAnswer(String method, String hex) throws IOException {
+        try {
+            return Utils.hexToBytes(hex.substring(2));
+        } catch(IllegalArgumentException | com.sparrowwallet.drongo.protocol.ProtocolException e) {
+            throw new MalformedAnswerException(method + " returned an invalid result", e);
+        }
+    }
+
     static String toQuantity(BigInteger value) {
         return "0x" + value.toString(16);
     }
 
     /** An error returned by the node, such as "insufficient funds" or "nonce too low". */
     public static final class LitVmRpcException extends IOException {
+        private final boolean revert;
+
         public LitVmRpcException(String message) {
+            this(message, false);
+        }
+
+        LitVmRpcException(String message, boolean revert) {
+            super(message);
+            this.revert = revert;
+        }
+
+        /** Whether the node reported that the called contract reverted, rather than failing itself. */
+        public boolean isRevert() {
+            return revert;
+        }
+    }
+
+    /**
+     * The endpoint answered, but not with what the method returns: text that is not JSON, a number that is not a
+     * quantity, data that is not hex. The endpoint's fault, so an IOException like any other failure to get an answer.
+     */
+    public static final class MalformedAnswerException extends IOException {
+        public MalformedAnswerException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    /** A call not sent because the client's time budget is spent ({@link #withDeadline}). */
+    public static final class DeadlineException extends IOException {
+        public DeadlineException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * The endpoint answered HTTP 429: it is limiting requests. The message is the one any other HTTP failure gives, and
+     * a caller that catches IOException sees no difference; one that must stop asking can tell it apart.
+     */
+    public static final class RateLimitedException extends IOException {
+        public RateLimitedException(String message) {
+            super(message);
+        }
+    }
+
+    /** An eth_call result larger than the caller allows: the contract's answer, not a failure of the network or node. */
+    public static final class OversizedResultException extends IOException {
+        public OversizedResultException(String message) {
             super(message);
         }
     }

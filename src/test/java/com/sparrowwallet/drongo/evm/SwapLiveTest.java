@@ -37,7 +37,7 @@ public class SwapLiveTest {
         EvmAccount account = EvmAccount.fromSeed(new DeterministicSeed(new ArrayList<>(words), "", 0, DeterministicSeed.Type.BIP39), 0);
         EvmAddress me = account.getAddress();
 
-        LitVmRpcClient base = new LitVmRpcClient(LitVmNetwork.BASE_SEPOLIA);
+        LitVmRpcClient base = new LitVmRpcClient(LitVmNetwork.BASE_SEPOLIA, EvmTransport.direct());
         base.verifyChain();
         UniswapV3Venue venue = new UniswapV3Venue();
         venue.verify(base);

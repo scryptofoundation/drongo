@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- a comment before the root -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" id="root" viewBox="0 0 10 10">
+  <title>A &amp; B</title>
+  <desc>described</desc>
+  <!-- inside -->
+  <g id="layer" font-family="Courier New, monospace" font-weight="700">
+    <text x="1" y="2">  A &lt;b&gt; &amp; &quot;c&quot; &apos;d&apos; &#65;&#x42;
+	tab  end  </text>
+    <text font-family="serif" font-weight="normal">&#x202E;evil&#x200B;zero&#x2066;</text>
+  </g>
+  <rect id="r1" width="1" height="1"><title>tip</title></rect>
+</svg>
+<!-- after the root -->

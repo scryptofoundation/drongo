@@ -201,6 +201,57 @@ public class InscriptionMintTest {
         Assertions.assertTrue(e.getMessage().contains("83"), e.getMessage());
     }
 
+    private InscriptionMint.Plan bellscoinPlan() {
+        wallet.setCoin(Coin.BELLSCOIN);
+        return new InscriptionMint.Plan(Inscription.text("hello bellscoin"), ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, null, 2.0, Coin.BELLSCOIN);
+    }
+
+    @Test
+    public void bellscoinRevealLandsThousand() throws Exception {
+        InscriptionMint.Plan plan = bellscoinPlan();
+        Assertions.assertEquals(1_000, plan.postage());
+        Assertions.assertEquals(1_000 + plan.revealFee(), plan.commitValue());
+        Transaction commit = InscriptionMint.commit(wallet, plan, fund(100_000), 2.0, 1.0).getTransaction();
+        Transaction reveal = InscriptionMint.reveal(plan, commit.getOutputs().get(0), REVEAL_PRIVATE);
+        Assertions.assertEquals(1_000, reveal.getOutputs().getFirst().getValue());
+    }
+
+    @Test
+    public void bellscoinMintDoesNotSignalRbf() throws Exception {
+        InscriptionMint.Plan plan = bellscoinPlan();
+        Transaction commit = InscriptionMint.commit(wallet, plan, fund(60_000, 50_000), 2.0, 1.0).getTransaction();
+        Transaction reveal = InscriptionMint.reveal(plan, commit.getOutputs().get(0), REVEAL_PRIVATE);
+        for(TransactionInput input : commit.getInputs()) {
+            Assertions.assertEquals(0xffffffffL, input.getSequenceNumber());
+        }
+        Assertions.assertEquals(0xffffffffL, reveal.getInputs().getFirst().getSequenceNumber());
+    }
+
+    @Test
+    public void litecoinPlanUnchanged() throws Exception {
+        InscriptionMint.Plan plan = textPlan();
+        Assertions.assertEquals(CollectibleTransactions.POSTAGE, plan.postage());
+        Assertions.assertEquals(10_000, InscriptionMint.mintPostage(Coin.LITECOIN));
+        Assertions.assertEquals(1_000, InscriptionMint.mintPostage(Coin.BELLSCOIN));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> InscriptionMint.mintPostage(Coin.DOGECOIN));
+        Transaction commit = InscriptionMint.commit(wallet, plan, fund(100_000), 2.0, 1.0).getTransaction();
+        Assertions.assertEquals(TransactionInput.SEQUENCE_RBF_ENABLED, commit.getInputs().getFirst().getSequenceNumber());
+        Transaction reveal = InscriptionMint.reveal(plan, commit.getOutputs().get(0), REVEAL_PRIVATE);
+        Assertions.assertEquals(TransactionInput.SEQUENCE_RBF_ENABLED, reveal.getInputs().getFirst().getSequenceNumber());
+    }
+
+    @Test
+    public void bellscoinRunestoneTextNamesItsCoin() {
+        RuneName name = RuneName.parse("Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z•Z");
+        BigInteger big = BigInteger.TWO.pow(100);
+        Runestone.Terms terms = new Runestone.Terms(big, BigInteger.TWO.pow(20), 1L << 40, 1L << 41, 1L << 40, 1L << 41);
+        Runestone.Etching etching = new Runestone.Etching(name, 38, 0x10FFFF, big, terms, true);
+        Inscription inscription = new Inscription(Inscription.TEXT, "big".getBytes(), name.commitment());
+        IllegalArgumentException e = Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new InscriptionMint.Plan(inscription, ECKey.fromPublicOnly(REVEAL_PRIVATE), destination, etching, 2.0, Coin.BELLSCOIN));
+        Assertions.assertFalse(e.getMessage().contains("Litecoin"), e.getMessage());
+    }
+
     @Test
     public void mwebFundingRefused() {
         Wallet mweb = new Wallet("mweb");
@@ -211,5 +262,32 @@ public class InscriptionMintTest {
         Address mwebAddress = new MwebAddress(new byte[66]);
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> new InscriptionMint.Plan(Inscription.text("x"), ECKey.fromPublicOnly(REVEAL_PRIVATE), mwebAddress, null, 2.0));
+    }
+
+    private static long dust(ScriptType type, double rate) {
+        TransactionOutput probe = new TransactionOutput(null, 0, type.getOutputScript(ECKey.fromPrivate(new BigInteger("11".repeat(32), 16)).getPubKey()));
+        return type.getFee(probe, rate, rate);
+    }
+
+    @Test
+    public void mintPostageFollowsTheDestinationTypeDustLimit() {
+        Assertions.assertEquals(1_000, InscriptionMint.mintPostage(Coin.BELLSCOIN, ScriptType.P2TR));
+        Assertions.assertEquals(1_000, InscriptionMint.mintPostage(Coin.BELLSCOIN));
+        //At Bellscoin's 3 per vB the P2PKH limit is below the 1,000 postage, so nothing rises
+        long p2pkhDust = dust(ScriptType.P2PKH, 3d);
+        Assertions.assertTrue(p2pkhDust < 1_000, "P2PKH dust " + p2pkhDust);
+        Assertions.assertTrue(InscriptionMint.mintPostage(Coin.BELLSCOIN, ScriptType.P2PKH) >= p2pkhDust);
+        Assertions.assertEquals(1_000, InscriptionMint.mintPostage(Coin.BELLSCOIN, ScriptType.P2PKH));
+        Assertions.assertEquals(10_000, InscriptionMint.mintPostage(Coin.LITECOIN, ScriptType.P2WPKH));
+        Assertions.assertEquals(10_000, InscriptionMint.mintPostage(Coin.LITECOIN, ScriptType.P2PKH));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> InscriptionMint.mintPostage(Coin.DOGECOIN, ScriptType.P2PKH));
+    }
+
+    @Test
+    public void mintPostageRaisesToAHigherDustLimit() {
+        long high = dust(ScriptType.P2PKH, 100d);
+        Assertions.assertTrue(high > 1_000);
+        Assertions.assertEquals(high, InscriptionMint.mintPostage(Coin.BELLSCOIN, ScriptType.P2PKH, 100d));
+        Assertions.assertEquals(1_000, InscriptionMint.mintPostage(Coin.BELLSCOIN, ScriptType.P2PKH, 1d));
     }
 }

@@ -77,7 +77,7 @@ public class SwapTest {
         Assumptions.assumeTrue("1".equals(System.getenv("LITVM_LIVE")));
         long deadline = System.currentTimeMillis() / 1000 + 600;
 
-        LitVmRpcClient base = new LitVmRpcClient(LitVmNetwork.BASE_SEPOLIA);
+        LitVmRpcClient base = new LitVmRpcClient(LitVmNetwork.BASE_SEPOLIA, EvmTransport.direct());
         base.verifyChain();
         UniswapV3Venue v3 = new UniswapV3Venue();
         v3.verify(base);
@@ -91,11 +91,11 @@ public class SwapTest {
         Assertions.assertTrue(base.l1DataFee(tx).signum() > 0, "Base charges an L1 data fee");
         Assertions.assertTrue(v3.quote(base, UniswapV3Venue.USDC, null, BigInteger.valueOf(100_000)).amountOut().signum() > 0);
 
-        LitVmRpcClient sepolia = new LitVmRpcClient(LitVmNetwork.SEPOLIA);
+        LitVmRpcClient sepolia = new LitVmRpcClient(LitVmNetwork.SEPOLIA, EvmTransport.direct());
         sepolia.verifyChain();
         BaseBridge.verify(sepolia);
 
-        LitVmRpcClient liteforge = new LitVmRpcClient(LitVmNetwork.LITEFORGE_TESTNET);
+        LitVmRpcClient liteforge = new LitVmRpcClient(LitVmNetwork.LITEFORGE_TESTNET, EvmTransport.direct());
         liteforge.verifyChain();
         UniswapV2Venue v2 = new UniswapV2Venue();
         v2.verify(liteforge);

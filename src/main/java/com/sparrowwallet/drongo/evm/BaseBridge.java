@@ -27,13 +27,17 @@ public final class BaseBridge {
             throw new IOException("Base deposits are sent on " + L1.getDisplayName());
         }
         try {
-            UniswapV3Venue.expect(l1, PORTAL, "systemConfig()", SYSTEM_CONFIG);
+            try {
+                UniswapV3Venue.expect(l1, PORTAL, "systemConfig()", SYSTEM_CONFIG);
+            } catch(LitVmCheckException e) {
+                throw new LitVmCheckException(LitVmCheckException.Reason.BRIDGE_MISMATCH, e.getMessage());
+            }
             long chainId = Abi.decodeUint(l1.ethCall(SYSTEM_CONFIG, Abi.selector("l2ChainId()")), 0).longValueExact();
             if(chainId != L2.getChainId()) {
-                throw new IOException("Portal's system config is for chain " + chainId + ", expected " + L2.getChainId());
+                throw new LitVmCheckException(LitVmCheckException.Reason.BRIDGE_MISMATCH, "Portal's system config is for chain " + chainId + ", expected " + L2.getChainId());
             }
             if(Abi.decodeBool(l1.ethCall(PORTAL, Abi.selector("paused()")), 0)) {
-                throw new IOException("The Base portal is paused");
+                throw new LitVmCheckException(LitVmCheckException.Reason.PORTAL_PAUSED, "The Base portal is paused");
             }
         } catch(IllegalArgumentException | ArithmeticException e) {
             throw new IOException("Invalid portal response: " + e.getMessage());

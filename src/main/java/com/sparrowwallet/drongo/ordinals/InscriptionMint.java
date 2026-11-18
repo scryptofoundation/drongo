@@ -1,5 +1,6 @@
 package com.sparrowwallet.drongo.ordinals;
 
+import com.sparrowwallet.drongo.Coin;
 import com.sparrowwallet.drongo.address.Address;
 import com.sparrowwallet.drongo.address.P2TRAddress;
 import com.sparrowwallet.drongo.crypto.ECKey;
@@ -14,8 +15,8 @@ import java.util.List;
 
 /**
  * Mints an inscription the way ord does, in two transactions. The commit pays a taproot output whose only script leaf
- * is the inscription's envelope; the reveal spends it by that script, putting the envelope on chain, and pays POSTAGE
- * to the destination (the inscription sits at its first sat). An etch is the same with the rune's commitment in the
+ * is the inscription's envelope; the reveal spends it by that script, putting the envelope on chain, and pays the
+ * coin's postage to the destination (the inscription sits at its first sat). An etch is the same with the rune's commitment in the
  * envelope and the etching runestone as the reveal's last output, after a second POSTAGE output holding the premine
  * (as ord does, so the premine can be sent without the inscription); ord only accepts it once the commit is
  * COMMIT_CONFIRMATIONS deep, so the reveal's sequence makes it unminable before then.
@@ -25,17 +26,26 @@ import java.util.List;
  */
 public final class InscriptionMint {
     public static final int COMMIT_CONFIRMATIONS = 6;
-    //Litecoin Core relays an OP_RETURN output of at most this many bytes (ord refuses larger runestones too)
+    //Nodes relay an OP_RETURN output of at most this many bytes (ord refuses larger runestones too)
     public static final int MAX_RUNESTONE_BYTES = 83;
+
+    //Any valid key: only the size of the output script of each type matters for a dust probe
+    private static final ECKey DUST_PROBE_KEY = ECKey.fromPrivate(new java.math.BigInteger("11".repeat(32), 16));
 
     private InscriptionMint() {}
 
     /**
      * @param revealKey the taproot wallet's key in the envelope script and the commit's internal key (public part)
      * @param etching the rune etched by the reveal, or null for a plain inscription
+     * @param coin the funding wallet's coin, which sets the postage and the sequences
      */
-    public record Plan(Inscription inscription, ECKey revealKey, Address destination, Runestone.Etching etching, double revealFeeRate) {
+    public record Plan(Inscription inscription, ECKey revealKey, Address destination, Runestone.Etching etching, double revealFeeRate, Coin coin) {
+        public Plan(Inscription inscription, ECKey revealKey, Address destination, Runestone.Etching etching, double revealFeeRate) {
+            this(inscription, revealKey, destination, etching, revealFeeRate, Coin.LITECOIN);
+        }
+
         public Plan {
+            mintPostage(coin);
             if(destination == null) {
                 throw new IllegalArgumentException("A destination is required");
             }
@@ -46,7 +56,7 @@ public final class InscriptionMint {
                 throw new IllegalArgumentException("An etch needs the rune's commitment in its envelope");
             }
             if(etching != null && InscriptionMint.etchRunestone(etching).getProgram().length > MAX_RUNESTONE_BYTES) {
-                throw new IllegalArgumentException("This etching's runestone is " + InscriptionMint.etchRunestone(etching).getProgram().length + " bytes, and Litecoin nodes relay at most "
+                throw new IllegalArgumentException("This etching's runestone is " + InscriptionMint.etchRunestone(etching).getProgram().length + " bytes, and " + coin.getCapitalizedName() + " nodes relay at most "
                         + MAX_RUNESTONE_BYTES + ". Use a shorter name, fewer spacers or fewer mint terms.");
             }
             int weight = inscription.revealWeight(revealOutputs(destination, etching));
@@ -74,9 +84,14 @@ public final class InscriptionMint {
             return (long)Math.ceil(Math.ceil(weight / 4.0) * revealFeeRate);
         }
 
+        /** The value each output of the reveal lands. */
+        public long postage() {
+            return mintPostage(coin, destination.getScriptType());
+        }
+
         /** Postage for each output the reveal pays, plus the reveal fee. */
         public long commitValue() {
-            return CollectibleTransactions.POSTAGE * (premineOutput(etching) ? 2 : 1) + revealFee();
+            return postage() * (premineOutput(etching) ? 2 : 1) + revealFee();
         }
 
         /** The etching runestone, pointing the premine at its own output; null for a plain inscription. */
@@ -87,6 +102,42 @@ public final class InscriptionMint {
         boolean etch() {
             return etching != null;
         }
+    }
+
+    /** The postage of a minted inscription: Litecoin keeps POSTAGE, Bellscoin lands 1,000 on its taproot destination. */
+    public static long mintPostage(Coin coin) {
+        return switch(coin) {
+            case LITECOIN -> CollectibleTransactions.POSTAGE;
+            case BELLSCOIN -> 1_000;
+            default -> throw new IllegalArgumentException(coin.getCapitalizedName() + " inscriptions are not minted by commit and reveal");
+        };
+    }
+
+    /** The coin's postage, raised to the dust limit of the destination's script type if that is higher. P2TR is the default. */
+    public static long mintPostage(Coin coin, ScriptType destinationType) {
+        return mintPostage(coin, destinationType, dustRelayFee(coin));
+    }
+
+    static long mintPostage(Coin coin, ScriptType destinationType, double dustRelayFee) {
+        //The type's own dust rule (output size plus the size to spend it), not the focused coin's flat soft limit
+        return Math.max(mintPostage(coin), destinationType.getFee(new TransactionOutput(null, 0, destinationType.getOutputScript(DUST_PROBE_KEY.getPubKey())), dustRelayFee, dustRelayFee));
+    }
+
+    /**
+     * The dust relay fee per virtual byte. Litecoin: DUST_RELAY_TX_FEE as the rest of drongo uses it. Bellscoin:
+     * BellsChain/bellscoin v3.1.1-rc2 src/policy/policy.h line 55, DUST_RELAY_TX_FEE{3000} (sat/kvB, so 3 per vB).
+     */
+    private static double dustRelayFee(Coin coin) {
+        return switch(coin) {
+            case LITECOIN -> Transaction.DUST_RELAY_TX_FEE;
+            case BELLSCOIN -> 3d;
+            default -> throw new IllegalArgumentException(coin.getCapitalizedName() + " inscriptions are not minted by commit and reveal");
+        };
+    }
+
+    /** Litecoin mints signal RBF as they always have; the other coins' mints do not. */
+    public static long mintSequence(Coin coin) {
+        return coin == Coin.LITECOIN ? TransactionInput.SEQUENCE_RBF_ENABLED : 0xffffffffL;
     }
 
     private static boolean premineOutput(Runestone.Etching etching) {
@@ -119,7 +170,7 @@ public final class InscriptionMint {
         Address commitAddress = plan.commitAddress();
         TransactionOutput commitOutput = new TransactionOutput(null, plan.commitValue(), commitAddress.getOutputScript());
         return CollectibleTransactions.build(funding, List.of(), List.of(new CollectibleTransactions.Planned(commitOutput, commitAddress, null, null)),
-                feeCandidates, feeRate, minRelayFeeRate);
+                feeCandidates, feeRate, minRelayFeeRate, 0, mintSequence(plan.coin()));
     }
 
     /**
@@ -142,11 +193,11 @@ public final class InscriptionMint {
         Transaction reveal = new Transaction();
         reveal.setVersion(2);
         TransactionInput input = reveal.addInput(commit.getTxId(), commitOutput.getIndex(), new Script(new byte[0]), new TransactionWitness(reveal, List.of()));
-        input.setSequenceNumber(plan.etch() ? COMMIT_CONFIRMATIONS - 1 : TransactionInput.SEQUENCE_RBF_ENABLED);
+        input.setSequenceNumber(plan.etch() ? COMMIT_CONFIRMATIONS - 1 : mintSequence(plan.coin()));
         //The commit output may hold more than planned (an earlier fee estimate); the destination still gets only postage
-        reveal.addOutput(CollectibleTransactions.POSTAGE, plan.destination().getOutputScript());
+        reveal.addOutput(plan.postage(), plan.destination().getOutputScript());
         if(premineOutput(plan.etching())) {
-            reveal.addOutput(CollectibleTransactions.POSTAGE, plan.destination().getOutputScript());
+            reveal.addOutput(plan.postage(), plan.destination().getOutputScript());
         }
         if(plan.etch()) {
             reveal.addOutput(0, plan.etchRunestone());

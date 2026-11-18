@@ -496,6 +496,8 @@ public enum Coin {
         return switch(this) {
             //dogecoin/dogecoin v1.14.9 chainparams: consensus 30, digishieldConsensus 240 from 145000 (main and test)
             case DOGECOIN -> coinbaseHeight < 145000 ? 30 : 240;
+            //pepecoin v1.1.0 chainparams: consensus 30, digishieldConsensus 240 from 1000 (main and test); regtest 60 throughout
+            case PEPECOIN -> network == Network.REGTEST ? 60 : (coinbaseHeight < 1000 ? 30 : 240);
             //junkcoin-core v4 chainparams: mainnet 70, testnet 30
             case JUNKCOIN -> network == Network.MAINNET ? 70 : 30;
             //Luckycoin v5.0.1 chainparams: 70 on every network and consensus era
@@ -517,9 +519,15 @@ public enum Coin {
      * min_activation_height 188000 in Bells Core v3) is active: mainnet blocks signalled it in every period from
      * the window's start and stopped at height 191520, the first period past the minimum height. On any other
      * coin an output to a Taproot program would be anyone-can-spend, so it stays off there.
+     * Bellscoin's testnet window closed on 2024-12-25 before the private testnet chain was mined, and Bells Core takes
+     * activation overrides on regtest only, so Taproot is off on Bellscoin testnet and always on on its regtest.
      */
     public boolean isTaprootSupported() {
-        return this == LITECOIN || this == BELLSCOIN;
+        return isTaprootSupported(Network.get());
+    }
+
+    public boolean isTaprootSupported(Network network) {
+        return this == LITECOIN || (this == BELLSCOIN && network != Network.TESTNET);
     }
 
     public boolean isMwebSupported() {
@@ -547,6 +555,15 @@ public enum Coin {
      * @param network the network of the chain the transaction is for
      * @param tipHeight the height of that chain's tip as the caller knows it, or null where it is not known
      */
+    public byte[] getSigHashPrefix(Network network, Integer tipHeight) {
+        if(this != LUCKYCOIN) {
+            return new byte[0];
+        }
+
+        boolean revival = network == Network.MAINNET || (tipHeight != null && tipHeight >= LUCKYCOIN_CHAIN_ID_HEIGHT);
+        return revival ? LUCKYCOIN_CHAIN_ID.clone() : new byte[0];
+    }
+
     /**
      * What this chain put before the preimage of every legacy and segwit v0 signature hash of a transaction mined in the block at the given height.
      * Luckycoin's ConnectBlock checks a block's transactions with GetChainSigVersion of that block's own index (validation.cpp), so a transaction
@@ -556,14 +573,6 @@ public enum Coin {
      */
     public byte[] getSigHashPrefixAtHeight(int blockHeight) {
         return this == LUCKYCOIN && blockHeight >= LUCKYCOIN_CHAIN_ID_HEIGHT ? LUCKYCOIN_CHAIN_ID.clone() : new byte[0];
-    }
-    public byte[] getSigHashPrefix(Network network, Integer tipHeight) {
-        if(this != LUCKYCOIN) {
-            return new byte[0];
-        }
-
-        boolean revival = network == Network.MAINNET || (tipHeight != null && tipHeight >= LUCKYCOIN_CHAIN_ID_HEIGHT);
-        return revival ? LUCKYCOIN_CHAIN_ID.clone() : new byte[0];
     }
 
     /**

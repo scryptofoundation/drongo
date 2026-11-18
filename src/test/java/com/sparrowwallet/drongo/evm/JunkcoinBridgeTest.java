@@ -58,7 +58,7 @@ public class JunkcoinBridgeTest {
     @Test
     public void liveBridgeMatchesPinnedConfig() throws Exception {
         Assumptions.assumeTrue("1".equals(System.getenv("LITVM_LIVE")));
-        LitVmRpcClient client = new LitVmRpcClient(JunkcoinBridge.NETWORK);
+        LitVmRpcClient client = new LitVmRpcClient(JunkcoinBridge.NETWORK, EvmTransport.direct());
         client.verifyChain();
         JunkcoinBridge.verifyBridge(client);
         Assertions.assertTrue(JunkcoinBridge.feeBps(client) <= JunkcoinBridge.MAX_FEE_BPS);

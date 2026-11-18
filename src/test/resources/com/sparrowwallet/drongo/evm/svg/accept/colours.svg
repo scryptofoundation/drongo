@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <rect width="1" height="1" fill="#abc"/>
+  <rect width="1" height="1" fill="#A1b2C3"/>
+  <rect width="1" height="1" fill="rgb(1,2,3)"/>
+  <rect width="1" height="1" fill=" RGB( 255 , 0 , 128 ) "/>
+  <rect width="1" height="1" fill="none" stroke="RED" stroke-opacity="-1"/>
+  <rect width="1" height="1" fill="black" fill-opacity="0.25"/>
+  <rect width="1" height="1" fill="silver"/>
+  <rect width="1" height="1" fill="gray"/>
+  <rect width="1" height="1" fill="white"/>
+  <rect width="1" height="1" fill="maroon"/>
+  <rect width="1" height="1" fill="red"/>
+  <rect width="1" height="1" fill="purple"/>
+  <rect width="1" height="1" fill="fuchsia"/>
+  <rect width="1" height="1" fill="green"/>
+  <rect width="1" height="1" fill="lime"/>
+  <rect width="1" height="1" fill="olive"/>
+  <rect width="1" height="1" fill="yellow"/>
+  <rect width="1" height="1" fill="navy"/>
+  <rect width="1" height="1" fill="blue"/>
+  <rect width="1" height="1" fill="teal"/>
+  <rect width="1" height="1" fill="aqua"/>
+</svg>

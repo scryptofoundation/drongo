@@ -62,8 +62,13 @@ public final class UniswapV3Venue implements SwapVenue {
     static void expect(LitVmRpcClient client, EvmAddress contract, String getter, EvmAddress expected) throws IOException {
         EvmAddress actual = Abi.decodeAddress(client.ethCall(contract, Abi.selector(getter)), 0);
         if(!expected.equals(actual)) {
-            throw new IOException(contract + " reports " + getter + " = " + actual + ", expected " + expected);
+            throw new LitVmCheckException(LitVmCheckException.Reason.VENUE_MISMATCH, contract + " reports " + getter + " = " + actual + ", expected " + expected);
         }
+    }
+
+    /** Whether a failed call is the chain's own answer (the contract reverted, or answered too much) rather than no answer. */
+    static boolean isAnswer(IOException e) {
+        return (e instanceof LitVmRpcClient.LitVmRpcException node && node.isRevert()) || e instanceof LitVmRpcClient.OversizedResultException;
     }
 
     private static EvmAddress address(Erc20Token token) {
@@ -79,6 +84,7 @@ public final class UniswapV3Venue implements SwapVenue {
         }
         Quote best = null;
         List<String> errors = new ArrayList<>();
+        IOException unanswered = null;
         for(int fee : FEE_TIERS) {
             try {
                 EvmAddress pool = Abi.decodeAddress(client.ethCall(FACTORY, Abi.encodeCall("getPool(address,address,uint24)", in, out, BigInteger.valueOf(fee))), 0);
@@ -97,12 +103,23 @@ public final class UniswapV3Venue implements SwapVenue {
                 if(amountOut.signum() > 0 && (best == null || amountOut.compareTo(best.amountOut()) > 0)) {
                     best = new Quote(tokenIn, tokenOut, amountIn, amountOut, List.of(in, out), fee);
                 }
-            } catch(IOException | IllegalArgumentException e) {
+            } catch(IllegalArgumentException e) {
+                errors.add(fee + ": " + e.getMessage());
+            } catch(IOException e) {
+                //A tier the chain answered for (no pool, a revert) cannot fill the swap; one the server did not answer for
+                //(the factory or the quoter: a timeout, a limit, an error of the node) is not known either way
+                if(!isAnswer(e)) {
+                    unanswered = e;
+                }
                 errors.add(fee + ": " + e.getMessage());
             }
         }
+        //"No pool" is said only when every tier was answered: one unknown tier could have filled the swap
+        if(best == null && unanswered != null) {
+            throw unanswered;
+        }
         if(best == null) {
-            throw new IOException("No Uniswap v3 pool can fill this swap" + (errors.isEmpty() ? "" : " (" + String.join("; ", errors) + ")"));
+            throw new LitVmCheckException(LitVmCheckException.Reason.NO_POOL, "No Uniswap v3 pool can fill this swap" + (errors.isEmpty() ? "" : " (" + String.join("; ", errors) + ")"));
         }
         return best;
     }

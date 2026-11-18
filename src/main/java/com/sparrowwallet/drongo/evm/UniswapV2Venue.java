@@ -66,6 +66,7 @@ public final class UniswapV2Venue implements SwapVenue {
             paths.add(List.of(in, WZKLTC, out));
         }
         Quote best = null;
+        IOException unanswered = null;
         for(List<EvmAddress> path : paths) {
             try {
                 List<byte[]> amounts = Abi.decodeBytes32Array(client.ethCall(ROUTER, Abi.encodeCall("getAmountsOut(uint256,address[])", amountIn, new Abi.AddressArray(path))), 0);
@@ -76,12 +77,21 @@ public final class UniswapV2Venue implements SwapVenue {
                 if(amountOut.signum() > 0 && (best == null || amountOut.compareTo(best.amountOut()) > 0)) {
                     best = new Quote(tokenIn, tokenOut, amountIn, amountOut, path, 0);
                 }
-            } catch(IOException | IllegalArgumentException e) {
+            } catch(IllegalArgumentException e) {
                 //no pair along this path
+            } catch(IOException e) {
+                //A path the chain answered for (no pair, a revert) is no pool; a server that did not answer is not
+                if(!UniswapV3Venue.isAnswer(e)) {
+                    unanswered = e;
+                }
             }
         }
+        //"No pool" is said only when every path was answered: one unknown path could have filled the swap
+        if(best == null && unanswered != null) {
+            throw unanswered;
+        }
         if(best == null) {
-            throw new IOException("No " + name() + " pool can fill this swap");
+            throw new LitVmCheckException(LitVmCheckException.Reason.NO_POOL, "No " + name() + " pool can fill this swap");
         }
         return best;
     }

@@ -102,7 +102,8 @@ public final class CollectibleTransactions {
     }
 
     /**
-     * True when the transaction moves an inscription or runes: it carries a runestone or an envelope, is the commit of a
+     * True when the transaction moves an inscription or runes: it carries a runestone or an envelope (in a witness or, for
+     * Doginals, a scriptSig), is the commit or funding tx of a
      * pending mint (kept on the master wallet), or spends an output of the wallet marked PROTECTED. Such a transaction must not be fee-bumped by the ordinary RBF rebuild, which drops
      * protected inputs, shuffles outputs and loses the runestone.
      */
@@ -112,7 +113,7 @@ public final class CollectibleTransactions {
 
     /** As above, with the pending mints looked up in the given wallets (the seed's taproot wallet may be another file). */
     public static boolean movesCollectibles(Wallet wallet, Transaction transaction, Collection<Wallet> pendingHolders) {
-        if(OrdinalsScan.hasRunestone(transaction) || OrdinalsScan.hasEnvelope(transaction)) {
+        if(OrdinalsScan.hasRunestone(transaction) || OrdinalsScan.hasEnvelope(transaction) || CarrierScan.hasScriptSigEnvelope(transaction)) {
             return true;
         }
         Sha256Hash txid = transaction.getTxId();
@@ -146,6 +147,12 @@ public final class CollectibleTransactions {
     /** As above, with a fixed surcharge added to the fee (the soft dust fee of the Dogecoin-derived chains). */
     static WalletTransaction build(Wallet wallet, List<Pinned> fixedInputs, List<Planned> planned, List<Pinned> feeCandidates,
                                            double feeRate, double minRelayFeeRate, long surcharge) throws InsufficientFundsException {
+        return build(wallet, fixedInputs, planned, feeCandidates, feeRate, minRelayFeeRate, surcharge, TransactionInput.SEQUENCE_RBF_ENABLED);
+    }
+
+    /** As above, with every input at the given sequence. */
+    static WalletTransaction build(Wallet wallet, List<Pinned> fixedInputs, List<Planned> planned, List<Pinned> feeCandidates,
+                                           double feeRate, double minRelayFeeRate, long surcharge, long sequence) throws InsufficientFundsException {
         List<Pinned> candidates = new ArrayList<>(feeCandidates);
         candidates.removeIf(candidate -> fixedInputs.stream().anyMatch(fixed -> fixed.utxo().equals(candidate.utxo())));
         candidates.sort(Comparator.comparingLong((Pinned p) -> p.utxo().getValue()).reversed());
@@ -158,26 +165,26 @@ public final class CollectibleTransactions {
             }
             long inputValue = inputs.stream().mapToLong(p -> p.utxo().getValue()).sum();
 
-            Transaction noChange = transaction(wallet, inputs, planned, null);
+            Transaction noChange = transaction(wallet, inputs, planned, null, sequence);
             long noChangeFee = fee(noChange, feeRate, minRelayFeeRate) + surcharge;
             if(inputValue - plannedValue < noChangeFee) {
                 continue;
             }
 
             WalletNode changeNode = wallet.getFreshNode(KeyPurpose.CHANGE, planned.stream().map(Planned::node).filter(Objects::nonNull).findFirst().orElse(null));
-            Transaction withChange = transaction(wallet, inputs, planned, new TransactionOutput(null, 0, changeNode.getOutputScript()));
+            Transaction withChange = transaction(wallet, inputs, planned, new TransactionOutput(null, 0, changeNode.getOutputScript()), sequence);
             long changeFee = fee(withChange, feeRate, minRelayFeeRate) + surcharge;
             long change = inputValue - plannedValue - changeFee;
             TransactionOutput probe = new TransactionOutput(null, change, changeNode.getOutputScript());
             //The same rule as ScriptType.getDustThreshold, but with the wallet's coin's dust limit, not the focused coin's
             long dust = Math.max(wallet.getScriptType().getFee(probe, Transaction.DUST_RELAY_TX_FEE, Transaction.DUST_RELAY_TX_FEE), wallet.getCoin().getDustLimit());
             if(change > dust) {
-                return walletTransaction(wallet, inputs, planned, changeNode, change, changeFee);
+                return walletTransaction(wallet, inputs, planned, changeNode, change, changeFee, sequence);
             }
-            return walletTransaction(wallet, inputs, planned, null, 0, inputValue - plannedValue);
+            return walletTransaction(wallet, inputs, planned, null, 0, inputValue - plannedValue, sequence);
         }
 
-        throw new InsufficientFundsException("Not enough checked LTC to pay the fee for this transaction");
+        throw new InsufficientFundsException("Not enough checked " + wallet.getCoin().getTicker() + " to pay the fee for this transaction");
     }
 
     private static long fee(Transaction transaction, double feeRate, double minRelayFeeRate) {
@@ -187,11 +194,11 @@ public final class CollectibleTransactions {
     }
 
     /** The transaction with dummy signatures, for sizing; the change output's value is not yet known. */
-    private static Transaction transaction(Wallet wallet, List<Pinned> inputs, List<Planned> planned, TransactionOutput change) {
+    private static Transaction transaction(Wallet wallet, List<Pinned> inputs, List<Planned> planned, TransactionOutput change, long sequence) {
         Transaction transaction = new Transaction();
         transaction.setVersion(2);
         for(Pinned input : inputs) {
-            Wallet.addDummySpendingInput(transaction, input.node(), previousOutput(input)).setSequenceNumber(TransactionInput.SEQUENCE_RBF_ENABLED);
+            Wallet.addDummySpendingInput(transaction, input.node(), previousOutput(input)).setSequenceNumber(sequence);
         }
         for(Planned output : planned) {
             transaction.addOutput(output.output().getValue(), output.output().getScript());
@@ -210,8 +217,9 @@ public final class CollectibleTransactions {
         return previous.getTransaction().getOutputs().get((int)input.utxo().getIndex());
     }
 
-    private static WalletTransaction walletTransaction(Wallet wallet, List<Pinned> inputs, List<Planned> planned, WalletNode changeNode, long change, long fee) {
-        Transaction transaction = transaction(wallet, inputs, planned, null);
+    private static WalletTransaction walletTransaction(Wallet wallet, List<Pinned> inputs, List<Planned> planned, WalletNode changeNode, long change, long fee,
+                                                       long sequence) {
+        Transaction transaction = transaction(wallet, inputs, planned, null, sequence);
         List<WalletTransaction.Output> outputs = new ArrayList<>();
         List<Payment> payments = new ArrayList<>();
         Map<WalletNode, Long> changeMap = new LinkedHashMap<>();

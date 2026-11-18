@@ -32,11 +32,14 @@ public class FinalizingPSBTWallet extends Wallet {
      */
     public FinalizingPSBTWallet(PSBT psbt, Wallet contextWallet) {
         super("Finalizing PSBT Wallet");
+        //Nothing is changed on the PSBT here: finalise stamps this wallet's chain on it (Wallet.stampSigHashPrefix), after the checks below
         if(psbt.getCoin() == null && contextWallet != null) {
             setCoin(contextWallet.getCoin());
             sigHashPrefix = contextWallet.getSigHashPrefix();
-            psbt.setSigHashPrefix(sigHashPrefix);
         } else {
+            if(psbt.getCoin() != null) {
+                setCoin(psbt.getCoin());
+            }
             sigHashPrefix = psbt.getSigHashPrefix();
         }
 

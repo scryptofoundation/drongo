@@ -91,7 +91,8 @@ public final class CarrierScan {
         return false;
     }
 
-    private static boolean isPartialLockScript(byte[] script) {
+    /** True for the redeem script ending a Doginals piece's scriptSig: pubkey, CHECKSIGVERIFY, OP_DROPs, OP_TRUE. */
+    public static boolean isPartialLockScript(byte[] script) {
         if(script.length < 36 || script[0] != 0x21 || (script[34] & 0xff) != 0xad || script[script.length - 1] != 0x51) {
             return false;
         }
@@ -103,7 +104,14 @@ public final class CarrierScan {
         return true;
     }
 
+    /**
+     * True if an output starts OP_RETURN, push "D", or the transaction holds a dunestone ord-with-dunes would read (which
+     * also accepts a non-minimal push of "D").
+     */
     public static boolean hasDunestone(Transaction tx) {
+        if(Dunestone.decode(tx).isPresent()) {
+            return true;
+        }
         for(TransactionOutput output : tx.getOutputs()) {
             byte[] script = output.getScriptBytes();
             if(script.length >= DUNESTONE.length && Arrays.equals(Arrays.copyOf(script, DUNESTONE.length), DUNESTONE)) {

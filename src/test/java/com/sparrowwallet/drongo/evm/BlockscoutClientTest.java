@@ -36,7 +36,7 @@ public class BlockscoutClientTest {
     @Test
     public void liveHistory() throws Exception {
         Assumptions.assumeTrue("1".equals(System.getenv("LITVM_LIVE")));
-        List<BlockscoutClient.Entry> history = new BlockscoutClient(LitVmNetwork.LITEFORGE_TESTNET).history(ME);
+        List<BlockscoutClient.Entry> history = new BlockscoutClient(LitVmNetwork.LITEFORGE_TESTNET, EvmTransport.direct()).history(ME);
         Assertions.assertFalse(history.isEmpty());
         Assertions.assertTrue(history.stream().anyMatch(e -> e.tokenTransfers().stream().anyMatch(t -> t.symbol().equals("wtJKC"))));
         for(BlockscoutClient.Entry entry : history.subList(0, Math.min(5, history.size()))) {

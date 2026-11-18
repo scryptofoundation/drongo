@@ -28,7 +28,7 @@ public class Erc20DeployLiveTest {
         Assumptions.assumeTrue("1".equals(System.getenv("LITVM_LIVE")));
         Erc20Templates templates = Erc20Templates.get();
         for(LitVmNetwork network : LitVmNetwork.values()) {
-            LitVmRpcClient client = new LitVmRpcClient(network);
+            LitVmRpcClient client = new LitVmRpcClient(network, EvmTransport.direct());
             client.verifyChain();
             for(String key : List.of("fixed", "mintable_v", "capped_bpevfc")) {
                 Erc20Templates.Options options = Erc20Templates.Options.fromKey(key);
@@ -53,7 +53,7 @@ public class Erc20DeployLiveTest {
         EvmAddress me = account.getAddress();
 
         LitVmNetwork network = LitVmNetwork.valueOf(Objects.requireNonNullElse(System.getenv("ERC20_NETWORK"), "LITEFORGE_TESTNET"));
-        LitVmRpcClient client = new LitVmRpcClient(network);
+        LitVmRpcClient client = new LitVmRpcClient(network, EvmTransport.direct());
         client.verifyChain();
         Erc20Templates templates = Erc20Templates.get();
         Erc20Templates.Options options = Erc20Templates.Options.fromKey(Objects.requireNonNullElse(System.getenv("ERC20_KEY"), "capped_bpevfc"));
@@ -83,7 +83,7 @@ public class Erc20DeployLiveTest {
         if(options.key().equals("capped_bpevfc")) {
             manage(client, account, contract, token, supply);
         }
-        verify(new BlockscoutClient(network), templates, options, contract, network);
+        verify(new BlockscoutClient(network, EvmTransport.direct()), templates, options, contract, network);
     }
 
     private static void manage(LitVmRpcClient client, EvmAccount account, EvmAddress contract, Erc20Token token, BigInteger supply) throws Exception {
@@ -100,7 +100,7 @@ public class Erc20DeployLiveTest {
     private static void verify(BlockscoutClient explorer, Erc20Templates templates, Erc20Templates.Options options, EvmAddress contract, LitVmNetwork network) throws Exception {
         if(SourcifyClient.supports(network)) {
             //Sourcify proves the source exactly; in October 2026 the Blockscout explorers could not reach their verifier service
-            SourcifyClient sourcify = new SourcifyClient(network);
+            SourcifyClient sourcify = new SourcifyClient(network, EvmTransport.direct());
             SourcifyClient.Status status = SourcifyClient.Status.PENDING;
             for(int attempt = 0; attempt < 6 && status != SourcifyClient.Status.EXACT; attempt++) {
                 try {
@@ -134,7 +134,7 @@ public class Erc20DeployLiveTest {
         Erc20Templates templates = Erc20Templates.get();
         Erc20Templates.Options options = Erc20Templates.Options.fromKey(Objects.requireNonNullElse(System.getenv("ERC20_KEY"), "capped_bpevfc"));
         String compiler = Objects.requireNonNullElse(System.getenv("ERC20_SOLC"), templates.compilerVersion());
-        verifyOnExplorer(new BlockscoutClient(network), compiler, templates, options, EvmAddress.fromString(address), network);
+        verifyOnExplorer(new BlockscoutClient(network, EvmTransport.direct()), compiler, templates, options, EvmAddress.fromString(address), network);
     }
 
     private static void verifyOnExplorer(BlockscoutClient explorer, String compiler, Erc20Templates templates, Erc20Templates.Options options,

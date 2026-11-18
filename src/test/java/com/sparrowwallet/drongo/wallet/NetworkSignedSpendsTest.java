@@ -399,6 +399,125 @@ public class NetworkSignedSpendsTest {
         }
     }
 
+    /**
+     * A height the server reports must not pick Luckycoin's old signature rule for a spend the chain now checks by the new one. A spend signed by the
+     * old rule, reported mined below 276500 on mainnet, is judged by the old rule only where that height is consistent with what the wallet knows: at
+     * or above every transaction it spends that the wallet holds, and not above the wallet's synced tip. Otherwise it is judged by the chain id rule,
+     * and so is not shown signed.
+     */
+    @Test
+    public void luckycoinOldRuleOnlyForAConsistentHeight() throws Exception {
+        Coin scope = Coin.beginScope(Coin.LUCKYCOIN);
+        try {
+            Wallet wallet = UnsignedInputsAllCoinsTest.buildWallet(Coin.LUCKYCOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+            Transaction funding0 = UnsignedInputsAllCoinsTest.fund(wallet, 0);
+            Transaction funding1 = UnsignedInputsAllCoinsTest.fund(wallet, 1);
+            //Signed by the old rule, as a test chain wallet below the height signs: the keys and scripts are the same on every network
+            PSBT psbt = UnsignedInputsAllCoinsTest.spendPsbt(wallet);
+            wallet.setNetwork(Network.TESTNET);
+            wallet.setStoredBlockHeight(1000);
+            wallet.sign(psbt);
+            wallet.finalise(psbt);
+            wallet.setNetwork(Network.MAINNET);
+            Transaction oldRule = new Transaction(psbt.extractTransaction().bitcoinSerialize());
+            Function<Sha256Hash, Transaction> lookup = txid -> UnsignedInputsAllCoinsTest.body(wallet, txid);
+            Map<Script, WalletNode> scripts = wallet.getWalletOutputScripts();
+            int claimed = 276400;
+
+            //Consistent: what it spends was mined below it, and the wallet has synced past it
+            wallet.setStoredBlockHeight(1_200_000);
+            hold(wallet, funding0, 276000);
+            hold(wallet, funding1, 276100);
+            Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(oldRule, lookup, scripts, claimed), "consistent height, old rule");
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(oldRule, lookup, scripts, null).size(), "unconfirmed, the chain id rule");
+
+            //It spends a transaction the wallet holds as mined later than the height claimed for it
+            hold(wallet, funding1, 300000);
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(oldRule, lookup, scripts, claimed).size(), "spends something mined after it");
+            //It spends a transaction the wallet holds as unconfirmed
+            hold(wallet, funding1, 0);
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(oldRule, lookup, scripts, claimed).size(), "spends something unconfirmed");
+            hold(wallet, funding1, 276100);
+
+            //The height claimed is above the tip the wallet has synced to
+            wallet.setStoredBlockHeight(276300);
+            Assertions.assertEquals(2, wallet.getUnsignedInputs(oldRule, lookup, scripts, claimed).size(), "above the synced tip");
+            wallet.setStoredBlockHeight(1_200_000);
+            Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(oldRule, lookup, scripts, claimed), "consistent again");
+
+            //A spend signed by the chain id rule is judged by it at a height at or above 276500, wherever the server says it is
+            Transaction chainIdRule = UnsignedInputsAllCoinsTest.signedSpend(wallet);
+            Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(chainIdRule, lookup, scripts, 300000));
+            Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(chainIdRule, lookup, scripts, null));
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    private static void hold(Wallet wallet, Transaction transaction, int height) {
+        wallet.updateTransactions(Map.of(transaction.getTxId(), new BlockTransaction(transaction.getTxId(), height, height > 0 ? new Date() : null, 0L, transaction)));
+    }
+
+    /**
+     * Luckycoin and Junkcoin wallets derive at the same path, so one seed gives the same keys and scripts on both, and a wallet of one could sign the
+     * other's PSBT by its own coin's rule. A PSBT marked for another coin is refused for signing and finalising, either way round.
+     */
+    @Test
+    public void psbtOfAnotherCoinIsNotSigned() throws Exception {
+        for(Coin[] pair : List.of(new Coin[] {Coin.LUCKYCOIN, Coin.JUNKCOIN}, new Coin[] {Coin.JUNKCOIN, Coin.LUCKYCOIN})) {
+            Coin psbtCoin = pair[0];
+            Coin walletCoin = pair[1];
+            PSBT psbt;
+            Coin scope = Coin.beginScope(psbtCoin);
+            try {
+                Wallet marking = UnsignedInputsAllCoinsTest.buildWallet(psbtCoin, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+                UnsignedInputsAllCoinsTest.fund(marking, 0);
+                UnsignedInputsAllCoinsTest.fund(marking, 1);
+                psbt = UnsignedInputsAllCoinsTest.spendPsbt(marking);
+            } finally {
+                Coin.endScope(scope);
+            }
+            Assertions.assertEquals(psbtCoin, psbt.getCoin());
+
+            scope = Coin.beginScope(walletCoin);
+            try {
+                Wallet other = UnsignedInputsAllCoinsTest.buildWallet(walletCoin, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+                UnsignedInputsAllCoinsTest.fund(other, 0);
+                UnsignedInputsAllCoinsTest.fund(other, 1);
+                Assertions.assertEquals(psbt.getPsbtInputs().size(), other.getSigningNodes(psbt).size(), "the other coin's wallet holds the same keys");
+                String expected = String.format(Wallet.PSBT_COIN_MISMATCH, psbtCoin.toDisplayString(), walletCoin.toDisplayString());
+                IllegalStateException signError = Assertions.assertThrows(IllegalStateException.class, () -> other.sign(psbt));
+                Assertions.assertEquals(expected, signError.getMessage());
+                IllegalStateException mapError = Assertions.assertThrows(IllegalStateException.class, () -> other.sign(other.getSigningNodes(psbt)));
+                Assertions.assertEquals(expected, mapError.getMessage());
+                Assertions.assertFalse(psbt.getPsbtInputs().stream().anyMatch(input -> !input.getPartialSignatures().isEmpty()), "nothing signed");
+                Assertions.assertThrows(IllegalStateException.class, () -> other.finalise(psbt));
+                Assertions.assertThrows(IllegalStateException.class, () -> other.stampSigHashPrefix(psbt));
+            } finally {
+                Coin.endScope(scope);
+            }
+        }
+    }
+
+    /**
+     * A finalizing wallet is only made for a signed PSBT. One made for an unsigned PSBT throws, and leaves the PSBT's own chain rule untouched
+     */
+    @Test
+    public void finalizingWalletLeavesAnUnsignedPsbtAlone() throws Exception {
+        Coin scope = Coin.beginScope(Coin.LUCKYCOIN);
+        try {
+            Wallet wallet = UnsignedInputsAllCoinsTest.buildWallet(Coin.LUCKYCOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+            UnsignedInputsAllCoinsTest.fund(wallet, 0);
+            UnsignedInputsAllCoinsTest.fund(wallet, 1);
+            PSBT unmarked = new PSBT(UnsignedInputsAllCoinsTest.spendPsbt(wallet).serialize(), false);
+            unmarked.getGlobalProprietary().remove(PSBT.COIN_MARK_KEY);
+            Assertions.assertThrows(IllegalArgumentException.class, () -> new FinalizingPSBTWallet(unmarked, wallet));
+            Assertions.assertEquals(0, unmarked.getSigHashPrefix().length, "the PSBT's rule is unchanged");
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
     private static Transaction signedLuckycoinSpend(Wallet wallet) throws Exception {
         UnsignedInputsAllCoinsTest.fund(wallet, 0);
         UnsignedInputsAllCoinsTest.fund(wallet, 1);
@@ -601,7 +720,6 @@ public class NetworkSignedSpendsTest {
                                        Integer height, String message) {
         Assertions.assertEquals(transaction.getInputs().size(), wallet.getSigningNodes(transaction, lookup, walletOutputScripts).size(), message + ": inputs judged");
         Assertions.assertEquals(Set.of(), wallet.getUnsignedInputs(transaction, lookup, walletOutputScripts, height), message + ": accepted");
-        Assertions.assertEquals(Set.of(), wallet.getInvalidlySignedInputs(transaction, lookup, walletOutputScripts, height), message + ": no definite finding");
     }
 
     private static void assertFlagged(Wallet wallet, Transaction transaction, Function<Sha256Hash, Transaction> lookup, Map<Script, WalletNode> walletOutputScripts, String message) {
@@ -612,7 +730,6 @@ public class NetworkSignedSpendsTest {
                                       Integer height, String message) {
         Assertions.assertEquals(transaction.getInputs().size(), wallet.getSigningNodes(transaction, lookup, walletOutputScripts).size(), message + ": inputs judged");
         Assertions.assertEquals(transaction.getInputs().size(), wallet.getUnsignedInputs(transaction, lookup, walletOutputScripts, height).size(), message + ": every input flagged");
-        Assertions.assertEquals(transaction.getInputs().size(), wallet.getInvalidlySignedInputs(transaction, lookup, walletOutputScripts, height).size(), message + ": a definite finding");
     }
 
     private static Transaction redirect(Transaction transaction) {

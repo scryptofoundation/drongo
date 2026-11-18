@@ -3,9 +3,6 @@ package com.sparrowwallet.drongo.evm;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -22,10 +19,12 @@ public final class BlockscoutClient {
     private static final EvmAddress NATIVE_PLACEHOLDER = EvmAddress.fromString("0xfffffffffffffffffffffffffffffffffffffffe");
 
     private final LitVmNetwork network;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+    private final EvmTransport transport;
 
-    public BlockscoutClient(LitVmNetwork network) {
+    /** Every request goes through this transport: the client has no way of its own to the explorer. */
+    public BlockscoutClient(LitVmNetwork network, EvmTransport transport) {
         this.network = network;
+        this.transport = Objects.requireNonNull(transport, "transport");
     }
 
     public LitVmNetwork getNetwork() {
@@ -176,13 +175,11 @@ public final class BlockscoutClient {
         fields.put("license_type", license);
         fields.put("autodetect_constructor_args", "true");
         byte[] body = multipart(boundary, fields, "files[0]", "input.json", standardJsonInput);
-        HttpRequest request = HttpRequest.newBuilder(URI.create(network.getExplorerUrl() + "/api/v2/smart-contracts/" + contract + "/verification/via/standard-input"))
-                .timeout(Duration.ofSeconds(60)).header("Accept", "application/json").header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .POST(HttpRequest.BodyPublishers.ofByteArray(body)).build();
-        HttpResponse<String> response = send(request);
-        if(response.statusCode() / 100 != 2) {
+        EvmTransport.Response response = send("/api/v2/smart-contracts/" + contract + "/verification/via/standard-input",
+                Map.of("Accept", "application/json", "Content-Type", "multipart/form-data; boundary=" + boundary), body, Duration.ofSeconds(60));
+        if(response.status() / 100 != 2) {
             String text = response.body().length() > 300 ? response.body().substring(0, 300) : response.body();
-            throw new IOException("Explorer refused verification (HTTP " + response.statusCode() + "): " + Erc20Token.sanitise(text, 300));
+            throw new IOException("Explorer refused verification (HTTP " + response.status() + "): " + Erc20Token.sanitise(text, 300));
         }
     }
 
@@ -191,14 +188,12 @@ public final class BlockscoutClient {
      * explorer also attaches one on its own, from someone else's source with the same code, which is not ours.
      */
     public boolean isVerified(EvmAddress contract) throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(network.getExplorerUrl() + "/api/v2/smart-contracts/" + contract)).timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/json").GET().build();
-        HttpResponse<String> response = send(request);
-        if(response.statusCode() == 404) {
+        EvmTransport.Response response = send("/api/v2/smart-contracts/" + contract, Map.of("Accept", "application/json"), null, Duration.ofSeconds(30));
+        if(response.status() == 404) {
             return false;
         }
-        if(response.statusCode() / 100 != 2 || response.body().length() > MAX_RESPONSE_CHARS) {
-            throw new IOException("Explorer returned HTTP " + response.statusCode());
+        if(response.status() / 100 != 2 || response.body().length() > MAX_RESPONSE_CHARS) {
+            throw new IOException("Explorer returned HTTP " + response.status());
         }
         return verifiedExactly(MiniJson.parse(response.body()));
     }
@@ -222,27 +217,15 @@ public final class BlockscoutClient {
         return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    private HttpResponse<String> send(HttpRequest request) throws IOException {
-        try {
-            return http.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch(InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted talking to the explorer", e);
-        }
+    /** One request to the explorer, by the client's transport. The cap is in bytes, at most four to a character. */
+    private EvmTransport.Response send(String path, Map<String, String> headers, byte[] body, Duration timeout) throws IOException {
+        return transport.send(URI.create(network.getExplorerUrl() + path), headers, body, timeout, 4 * MAX_RESPONSE_CHARS);
     }
 
     private Object get(String path) throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(network.getExplorerUrl() + path)).timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/json").GET().build();
-        HttpResponse<String> response;
-        try {
-            response = http.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch(InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted reading history", e);
-        }
-        if(response.statusCode() / 100 != 2) {
-            throw new IOException("Explorer returned HTTP " + response.statusCode());
+        EvmTransport.Response response = send(path, Map.of("Accept", "application/json"), null, Duration.ofSeconds(30));
+        if(response.status() / 100 != 2) {
+            throw new IOException("Explorer returned HTTP " + response.status());
         }
         if(response.body().length() > MAX_RESPONSE_CHARS) {
             throw new IOException("Explorer response too large");

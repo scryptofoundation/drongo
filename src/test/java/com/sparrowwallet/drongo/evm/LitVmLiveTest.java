@@ -19,7 +19,7 @@ import java.util.Locale;
 public class LitVmLiveTest {
     @Test
     public void liteForgeAcceptsOurEncodingAndSignature() throws Exception {
-        LitVmRpcClient client = new LitVmRpcClient(LitVmNetwork.LITEFORGE_TESTNET);
+        LitVmRpcClient client = new LitVmRpcClient(LitVmNetwork.LITEFORGE_TESTNET, EvmTransport.direct());
         client.verifyChain();
         Assertions.assertEquals(4441L, client.chainId());
 

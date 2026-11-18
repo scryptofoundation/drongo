@@ -1,0 +1,11 @@
+# Dogecoin mainnet c04c331cff2af09baf4adf56cda4da6aa9733b4dac05e7ff18f4651cc7564a97 (block 5415222), fetched 2026-11-07
+# with blockchain.transaction.get from dogecoin.stackwallet.com:50022.
+# Dunestone: pointer 1, then two edicts of dune 5095523:3, 10000 to output 2 and 10000 to output 3 (the second id is
+# delta 0).
+# Dune 5095523:3 is ONEDUNE•ONELAMBO: blockchain.transaction.id_from_pos(5095523, 3) is
+# b5cbd797df3d3a220e595ed4c585848b9cf7ca38092698f24cb279068e153cb3, which etches it, and DogeOrd
+# (GET https://explorer.doginals.store/v1/dune/DOGECOIN:ONEDUNEONELAMBO, 2026-11-07) gives that etching txid,
+# etched_height 5095523, divisibility 8. DogeOrd reports no amounts for this transfer: both outputs are spent and its
+# Dunes index lists no holders or supply for the dune (activity_since 6445557). The amounts are as ord-with-dunes
+# decodes them.
+010000000226df4a36e0df172d19ec77040308dffafece8650275349400aaf07e7777814f6010000006a473044022072355948a362add9ff4b07e429cdf44fcb59812f4795971185e82265f55a97a60220288e60887462d9414c09cc265d99f4cb19d14f11ff4cbe9c70629f4060a2fc620121025021873ae8b8c5ce9a5b1b900e78f2e8959d48f7aeeacd1f30af06a45e4ed2fcffffffffe032d4f76bbae0358081630a41b75f0bb4c50d0c3b00ec848438cb643c66ab53030000006a4730440220371741ecc83aaca56bf721b7f1aa6e4e8812d2cc2b6d8b25624fe8a0d3da8ea30220603526a6caca1ce2ad45511ab88e4aa9a1df357c552336ecc6f2f8b251d296f10121025021873ae8b8c5ce9a5b1b900e78f2e8959d48f7aeeacd1f30af06a45e4ed2fcffffffff050000000000000000146a0144100c010088db828aff03cd100200cd1003a0860100000000001976a914a3e054e164ead1d6b029a50855e18c7a8a6010e688aca0860100000000001976a9143cf59a13d14cf2b9fbf4b92c5d548b3f1141344088aca0860100000000001976a9143cf59a13d14cf2b9fbf4b92c5d548b3f1141344088ac2019cd38020000001976a914a3e054e164ead1d6b029a50855e18c7a8a6010e688ac00000000

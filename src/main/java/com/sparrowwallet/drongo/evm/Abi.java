@@ -157,6 +157,15 @@ public final class Abi {
      * trimmed of trailing zero bytes.
      */
     public static String decodeString(byte[] result) {
+        return decodeString(result, MAX_DYNAMIC_LENGTH);
+    }
+
+    /**
+     * As {@link #decodeString(byte[])}, refusing a string longer than maxLength bytes, for a result the caller
+     * expects to be larger than token metadata (an NFT's tokenURI). The offset and length words are checked against
+     * the data actually present before anything is copied.
+     */
+    public static String decodeString(byte[] result, int maxLength) {
         if(result.length == WORD) {
             int end = WORD;
             while(end > 0 && result[end - 1] == 0) {
@@ -170,7 +179,7 @@ public final class Abi {
         }
         int start = offset.intValue();
         BigInteger length = new BigInteger(1, Arrays.copyOfRange(result, start, start + WORD));
-        if(length.bitLength() > 31 || length.intValue() > MAX_DYNAMIC_LENGTH || (long)start + WORD + length.intValue() > result.length) {
+        if(length.bitLength() > 31 || length.intValue() > maxLength || (long)start + WORD + length.intValue() > result.length) {
             throw new IllegalArgumentException("String length out of range");
         }
         return new String(result, start + WORD, length.intValue(), StandardCharsets.UTF_8);

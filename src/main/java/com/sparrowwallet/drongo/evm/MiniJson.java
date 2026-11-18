@@ -7,8 +7,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A small strict JSON reader for JSON-RPC responses, so drongo does not take a JSON library dependency.
+ * A small strict JSON reader for JSON-RPC responses and NFT metadata, so drongo does not take a JSON library dependency.
  * Objects become LinkedHashMap, arrays ArrayList, numbers BigDecimal; strings, booleans and null as usual.
+ *
+ * Strict JSON (RFC 8259), with no use of the platform's Unicode data, so the phone's port reads exactly the same:
+ * whitespace is space, tab, line feed and carriage return only; a \\u escape is exactly four ASCII hex digits; numbers
+ * follow the JSON grammar (no leading +, no leading zeros, digits on both sides of a point); a raw character below
+ * U+0020 inside a string is refused. A repeated key keeps its last value, in the place of its first.
  */
 final class MiniJson {
     //Bounds on untrusted RPC input: nesting deep enough to overflow the stack, or a number token like 1e999999999
@@ -123,11 +128,21 @@ final class MiniJson {
                         if(pos + 4 > s.length()) {
                             throw error("Bad unicode escape");
                         }
-                        sb.append((char)Integer.parseInt(s.substring(pos, pos + 4), 16));
+                        int code = 0;
+                        for(int i = 0; i < 4; i++) {
+                            int digit = hexDigit(s.charAt(pos + i));
+                            if(digit < 0) {
+                                throw error("Bad unicode escape");
+                            }
+                            code = code << 4 | digit;
+                        }
+                        sb.append((char)code);
                         pos += 4;
                     }
                     default -> throw error("Bad escape");
                 }
+            } else if(c < 0x20) {
+                throw error("Control character in string");
             } else {
                 sb.append(c);
             }
@@ -135,13 +150,33 @@ final class MiniJson {
         throw error("Unterminated string");
     }
 
+    //-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?
     private BigDecimal number() {
         int start = pos;
-        while(pos < s.length() && "+-0123456789.eE".indexOf(s.charAt(pos)) >= 0) {
+        if(peek('-')) {
             pos++;
         }
-        if(start == pos) {
-            throw error("Unexpected character");
+        if(peek('0')) {
+            pos++;
+        } else if(pos < s.length() && s.charAt(pos) >= '1' && s.charAt(pos) <= '9') {
+            digits();
+        } else {
+            throw error(start == pos ? "Unexpected character" : "Malformed number");
+        }
+        if(peek('.')) {
+            pos++;
+            if(digits() == 0) {
+                throw error("Malformed number");
+            }
+        }
+        if(peek('e') || peek('E')) {
+            pos++;
+            if(peek('+') || peek('-')) {
+                pos++;
+            }
+            if(digits() == 0) {
+                throw error("Malformed number");
+            }
         }
         String token = s.substring(start, pos);
         if(token.length() > MAX_NUMBER_LENGTH) {
@@ -179,8 +214,33 @@ final class MiniJson {
         return pos < s.length() && s.charAt(pos) == c;
     }
 
+    private int digits() {
+        int start = pos;
+        while(pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') {
+            pos++;
+        }
+        return pos - start;
+    }
+
+    private static int hexDigit(char c) {
+        if(c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if(c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if(c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
+    }
+
     private void skipWhitespace() {
-        while(pos < s.length() && Character.isWhitespace(s.charAt(pos))) {
+        while(pos < s.length()) {
+            char c = s.charAt(pos);
+            if(c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+                return;
+            }
             pos++;
         }
     }

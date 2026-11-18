@@ -2,9 +2,6 @@ package com.sparrowwallet.drongo.evm;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
 
@@ -20,13 +17,15 @@ public final class SourcifyClient {
     public enum Status { PENDING, EXACT, PARTIAL, FAILED }
 
     private final LitVmNetwork network;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+    private final EvmTransport transport;
 
-    public SourcifyClient(LitVmNetwork network) {
+    /** Every request goes through this transport: the client has no way of its own to Sourcify. */
+    public SourcifyClient(LitVmNetwork network, EvmTransport transport) {
         if(!supports(network)) {
             throw new IllegalArgumentException("Sourcify does not support " + network.getDisplayName());
         }
         this.network = network;
+        this.transport = java.util.Objects.requireNonNull(transport, "transport");
     }
 
     /** LiteForge is not one of Sourcify's chains. */
@@ -36,10 +35,8 @@ public final class SourcifyClient {
 
     /** Submits the input and returns the job id to follow with {@link #job(String)}. */
     public String submit(EvmAddress contract, String standardJsonInput, String compilerVersion, String contractIdentifier) throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(SERVER + "/v2/verify/" + network.getChainId() + "/" + contract))
-                .timeout(Duration.ofSeconds(60)).header("Content-Type", "application/json").header("Accept", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody(standardJsonInput, compilerVersion, contractIdentifier))).build();
-        Object response = parse(send(request), "verification");
+        Object response = parse(send("/v2/verify/" + network.getChainId() + "/" + contract, Map.of("Content-Type", "application/json", "Accept", "application/json"),
+                requestBody(standardJsonInput, compilerVersion, contractIdentifier).getBytes(java.nio.charset.StandardCharsets.UTF_8), Duration.ofSeconds(60)), "verification");
         if(response instanceof Map<?, ?> map && map.get("verificationId") instanceof String id && id.matches("[0-9a-fA-F-]{8,64}")) {
             return id;
         }
@@ -47,17 +44,13 @@ public final class SourcifyClient {
     }
 
     public Status job(String verificationId) throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(SERVER + "/v2/verify/" + verificationId)).timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/json").GET().build();
-        return status(parse(send(request), "job"));
+        return status(parse(send("/v2/verify/" + verificationId, Map.of("Accept", "application/json"), null, Duration.ofSeconds(30)), "job"));
     }
 
     /** Whether Sourcify holds source that exactly matches the contract. */
     public boolean isVerified(EvmAddress contract) throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(SERVER + "/v2/contract/" + network.getChainId() + "/" + contract)).timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/json").GET().build();
-        HttpResponse<String> response = send(request);
-        if(response.statusCode() == 404) {
+        EvmTransport.Response response = send("/v2/contract/" + network.getChainId() + "/" + contract, Map.of("Accept", "application/json"), null, Duration.ofSeconds(30));
+        if(response.status() == 404) {
             return false;
         }
         Object parsed = parse(response, "lookup");
@@ -92,16 +85,12 @@ public final class SourcifyClient {
         return "";
     }
 
-    private HttpResponse<String> send(HttpRequest request) throws IOException {
-        try {
-            return http.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch(InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted talking to Sourcify", e);
-        }
+    /** One request to Sourcify, by the client's transport. The cap is in bytes, at most four to a character. */
+    private EvmTransport.Response send(String path, Map<String, String> headers, byte[] body, Duration timeout) throws IOException {
+        return transport.send(URI.create(SERVER + path), headers, body, timeout, 4 * MAX_RESPONSE_CHARS);
     }
 
-    private static Object parse(HttpResponse<String> response, String what) throws IOException {
+    private static Object parse(EvmTransport.Response response, String what) throws IOException {
         if(response.body().length() > MAX_RESPONSE_CHARS) {
             throw new IOException("Sourcify " + what + " response too large");
         }
@@ -109,10 +98,10 @@ public final class SourcifyClient {
         try {
             parsed = MiniJson.parse(response.body());
         } catch(IllegalArgumentException e) {
-            throw new IOException("Sourcify returned HTTP " + response.statusCode());
+            throw new IOException("Sourcify returned HTTP " + response.status());
         }
-        if(response.statusCode() / 100 != 2) {
-            throw new IOException("Sourcify refused the " + what + " (HTTP " + response.statusCode() + ")" + message(parsed));
+        if(response.status() / 100 != 2) {
+            throw new IOException("Sourcify refused the " + what + " (HTTP " + response.status() + ")" + message(parsed));
         }
         return parsed;
     }

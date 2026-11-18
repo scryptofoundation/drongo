@@ -122,6 +122,101 @@ public class ECDSASignature {
     }
 
     /**
+     * Parses a DER signature as Bitcoin Core's consensus code does (ecdsa_signature_parse_der_lax in src/pubkey.cpp, from libsecp256k1's contrib),
+     * accepting the format violations found in transactions mined before strict DER (BIP66 and its ports on Litecoin and Dogecoin): negative
+     * integers, excessive padding, garbage at the end and overly long length descriptors. Where an R or S value does not fit, the result is the
+     * signature of zeros, which verifies against nothing, as Core's does.
+     *
+     * @param bytes the DER signature, without the sighash byte
+     * @throws SignatureDecodeException where Core's parser fails, so Core would find no signature here
+     */
+    public static ECDSASignature decodeFromDERLax(byte[] bytes) throws SignatureDecodeException {
+        int inputlen = bytes.length;
+        int pos = 0;
+        //Sequence tag byte
+        if(pos == inputlen || (bytes[pos] & 0xff) != 0x30) {
+            throw new SignatureDecodeException("No sequence tag");
+        }
+        pos++;
+        //Sequence length bytes
+        if(pos == inputlen) {
+            throw new SignatureDecodeException("No sequence length");
+        }
+        int lenbyte = bytes[pos++] & 0xff;
+        if((lenbyte & 0x80) != 0) {
+            lenbyte -= 0x80;
+            if(lenbyte > inputlen - pos) {
+                throw new SignatureDecodeException("Sequence length runs past the end");
+            }
+            pos += lenbyte;
+        }
+
+        int[] r = readLaxInteger(bytes, pos, "R");
+        pos = r[0] + r[1];
+        int[] s = readLaxInteger(bytes, pos, "S");
+
+        BigInteger rValue = laxValue(bytes, r[0], r[1]);
+        BigInteger sValue = laxValue(bytes, s[0], s[1]);
+        if(rValue == null || sValue == null || rValue.compareTo(CURVE.getN()) >= 0 || sValue.compareTo(CURVE.getN()) >= 0) {
+            return new ECDSASignature(BigInteger.ZERO, BigInteger.ZERO);
+        }
+        return new ECDSASignature(rValue, sValue);
+    }
+
+    /** Reads an integer tag and length at pos, returning the position and length of its value */
+    private static int[] readLaxInteger(byte[] bytes, int pos, String name) throws SignatureDecodeException {
+        int inputlen = bytes.length;
+        if(pos == inputlen || (bytes[pos] & 0xff) != 0x02) {
+            throw new SignatureDecodeException("No integer tag for " + name);
+        }
+        pos++;
+        if(pos == inputlen) {
+            throw new SignatureDecodeException("No integer length for " + name);
+        }
+        int lenbyte = bytes[pos++] & 0xff;
+        long length;
+        if((lenbyte & 0x80) != 0) {
+            lenbyte -= 0x80;
+            if(lenbyte > inputlen - pos) {
+                throw new SignatureDecodeException("Integer length of " + name + " runs past the end");
+            }
+            while(lenbyte > 0 && bytes[pos] == 0) {
+                pos++;
+                lenbyte--;
+            }
+            if(lenbyte >= 4) {
+                throw new SignatureDecodeException("Integer length of " + name + " too long");
+            }
+            length = 0;
+            while(lenbyte > 0) {
+                length = (length << 8) + (bytes[pos] & 0xff);
+                pos++;
+                lenbyte--;
+            }
+        } else {
+            length = lenbyte;
+        }
+        if(length > inputlen - pos) {
+            throw new SignatureDecodeException("Integer " + name + " runs past the end");
+        }
+        return new int[] {pos, (int)length};
+    }
+
+    /** The unsigned value of an integer, its leading zeroes ignored, or null where it is longer than 32 bytes */
+    private static BigInteger laxValue(byte[] bytes, int pos, int length) {
+        while(length > 0 && bytes[pos] == 0) {
+            length--;
+            pos++;
+        }
+        if(length > 32) {
+            return null;
+        }
+        byte[] value = new byte[length];
+        System.arraycopy(bytes, pos, value, 0, length);
+        return new BigInteger(1, value);
+    }
+
+    /**
      * <p>Verifies the given ECDSA signature against the message bytes using the public key bytes.</p>
      *
      * <p>When using native ECDSA verification, data must be 32 bytes, and no element may be
@@ -192,7 +287,12 @@ public class ECDSASignature {
         if(requireCanonicalEncoding && !isEncodingCanonical(bytes)) {
             throw new VerificationException.NoncanonicalSignature();
         }
-        ECDSASignature sig = ECDSASignature.decodeFromDER(bytes);
+        //A transaction signature is read as consensus reads it, so one mined before strict DER verifies here as it did on the chain
+        if(bytes.length == 0) {
+            throw new SignatureDecodeException("Empty signature");
+        }
+        //The last byte is always the sighash byte: DER alone is no transaction signature, as consensus reads it
+        ECDSASignature sig = ECDSASignature.decodeFromDERLax(java.util.Arrays.copyOf(bytes, bytes.length - 1));
         if(requireCanonicalSValue && !sig.isCanonical()) {
             throw new VerificationException("S-value is not canonical.");
         }

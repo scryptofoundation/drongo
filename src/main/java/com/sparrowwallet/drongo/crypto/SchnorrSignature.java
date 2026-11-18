@@ -59,6 +59,10 @@ public class SchnorrSignature {
         BigInteger s = new BigInteger(1, Arrays.copyOfRange(bytes, 32, 64));
 
         if(bytes.length == 65) {
+            //SIGHASH_DEFAULT is only ever the 64 byte form: consensus refuses it named explicitly (BIP341)
+            if(bytes[64] == 0x00) {
+                throw new IllegalArgumentException("Invalid Schnorr signature: 65 bytes with sighash type 0x00");
+            }
             return new TransactionSignature(r, s, TransactionSignature.Type.SCHNORR, bytes[64]);
         }
 

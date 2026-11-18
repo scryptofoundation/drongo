@@ -38,8 +38,8 @@ public class ZkLtcBridgeTest {
     @Test
     public void liveProofMatchesConfirmedRoot() throws Exception {
         Assumptions.assumeTrue("1".equals(System.getenv("LITVM_LIVE")));
-        LitVmRpcClient l1 = new LitVmRpcClient(ZkLtcBridge.L1);
-        LitVmRpcClient l2 = new LitVmRpcClient(ZkLtcBridge.L2);
+        LitVmRpcClient l1 = new LitVmRpcClient(ZkLtcBridge.L1, EvmTransport.direct());
+        LitVmRpcClient l2 = new LitVmRpcClient(ZkLtcBridge.L2, EvmTransport.direct());
         l1.verifyChain();
         l2.verifyChain();
         ZkLtcBridge.verifyBridge(l1);

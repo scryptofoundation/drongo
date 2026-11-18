@@ -41,7 +41,7 @@ public class ZkLtcBridgeLiveTest {
     public void withdrawToSepolia() throws Exception {
         Assumptions.assumeTrue("1".equals(System.getenv("ZK_WITHDRAW")));
         EvmAccount account = account();
-        LitVmRpcClient l2 = new LitVmRpcClient(ZkLtcBridge.L2);
+        LitVmRpcClient l2 = new LitVmRpcClient(ZkLtcBridge.L2, EvmTransport.direct());
         l2.verifyChain();
         BigInteger amount = Wei.parse("0.001");
         Eip1559Transaction tx = l2.prepareCall(account.getAddress(), ZkLtcBridge.ARB_SYS, amount, ZkLtcBridge.withdrawCall(account.getAddress()));
@@ -64,8 +64,8 @@ public class ZkLtcBridgeLiveTest {
         String l2Hash = System.getenv("ZK_CLAIM_TX");
         Assumptions.assumeTrue(l2Hash != null);
         EvmAccount account = account();
-        LitVmRpcClient l1 = new LitVmRpcClient(ZkLtcBridge.L1);
-        LitVmRpcClient l2 = new LitVmRpcClient(ZkLtcBridge.L2);
+        LitVmRpcClient l1 = new LitVmRpcClient(ZkLtcBridge.L1, EvmTransport.direct());
+        LitVmRpcClient l2 = new LitVmRpcClient(ZkLtcBridge.L2, EvmTransport.direct());
         l1.verifyChain();
         l2.verifyChain();
         ZkLtcBridge.Withdrawal withdrawal = ZkLtcBridge.findWithdrawal(l2, l2Hash);
