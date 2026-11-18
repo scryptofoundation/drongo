@@ -526,6 +526,35 @@ public enum Coin {
         return mweb;
     }
 
+    /** The height from which Luckycoin's signature hashes start with its chain id: the next block's previous block is at or above it */
+    public static final int LUCKYCOIN_CHAIN_ID_HEIGHT = 276500;
+
+    //Luckycoin's replay protection (LuckycoinFoundation/Luckycoin @8b1fa2b5, script/interpreter.h line 111, CHAIN_ID "LUCKYCOIN_REVIVAL"),
+    //serialized as the uint256 it is there
+    private static final byte[] LUCKYCOIN_CHAIN_ID = Utils.reverseBytes(Utils.hexToBytes("000000000000000000000000000000" + "4c55434b59434f494e5f5245564956414c"));
+
+    /**
+     * What this chain puts before the preimage of every legacy and segwit v0 signature hash, or nothing where it hashes as Bitcoin does. This is the
+     * one place the rule lives; callers that sign or verify a transaction carry the result to Transaction's hash functions.
+     *
+     * Luckycoin prefixes its chain id once the chain tip is at or above height 276500 (validation.cpp GetChainSigVersion, called with the tip by
+     * AcceptToMemoryPoolWorker and with the previous block by ConnectBlock; interpreter.cpp SignatureHash). The height is fixed, the same on every
+     * network. Mainnet is far above it, so it always takes the prefix. On testnet and regtest it goes by the chain's tip where the caller knows it,
+     * and where it does not the prefix is left out: the only such chains in use are the private test chains mined from the testnet genesis, all
+     * below the height, whose nodes check the original hash.
+     *
+     * @param network the network of the chain the transaction is for
+     * @param tipHeight the height of that chain's tip as the caller knows it, or null where it is not known
+     */
+    public byte[] getSigHashPrefix(Network network, Integer tipHeight) {
+        if(this != LUCKYCOIN) {
+            return new byte[0];
+        }
+
+        boolean revival = network == Network.MAINNET || (tipHeight != null && tipHeight >= LUCKYCOIN_CHAIN_ID_HEIGHT);
+        return revival ? LUCKYCOIN_CHAIN_ID.clone() : new byte[0];
+    }
+
     /**
      * Silent payment wallets need the chain's silent payment HRPs, which only Litecoin defines here (upstream's
      * scheme, with ltcsp prefixes). The other coins have neither the HRPs nor Taproot.

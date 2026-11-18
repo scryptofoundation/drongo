@@ -630,6 +630,14 @@ public class Transaction extends ChildMessage {
     }
 
     public Sha256Hash hashForLegacySignature(int inputIndex, byte[] connectedScript, byte sigHashType) {
+        return hashForLegacySignature(inputIndex, connectedScript, sigHashType, new byte[0]);
+    }
+
+    /**
+     * The legacy signature hash with the given bytes before its preimage, which a chain with replay protected signatures requires (see
+     * Coin.getSigHashPrefix). An empty prefix gives Bitcoin's hash.
+     */
+    public Sha256Hash hashForLegacySignature(int inputIndex, byte[] connectedScript, byte sigHashType, byte[] sigHashPrefix) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             this.bitcoinSerializeToStream(baos);
@@ -699,6 +707,7 @@ public class Transaction extends ChildMessage {
             }
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream(tx.length);
+            bos.write(sigHashPrefix);
             tx.bitcoinSerializeToStream(bos, false);
             // We also have to write a hash type (sigHashType is actually an unsigned char)
             uint32ToByteStreamLE(0x000000ff & sigHashType, bos);
@@ -729,6 +738,14 @@ public class Transaction extends ChildMessage {
     }
 
     public synchronized Sha256Hash hashForWitnessSignature(int inputIndex, byte[] scriptCode, long prevValue, byte sigHashType) {
+        return hashForWitnessSignature(inputIndex, scriptCode, prevValue, sigHashType, new byte[0]);
+    }
+
+    /**
+     * The BIP143 signature hash with the given bytes before its preimage, which a chain with replay protected signatures requires (see
+     * Coin.getSigHashPrefix). An empty prefix gives Bitcoin's hash.
+     */
+    public synchronized Sha256Hash hashForWitnessSignature(int inputIndex, byte[] scriptCode, long prevValue, byte sigHashType, byte[] sigHashPrefix) {
         ByteArrayOutputStream bos = new UnsafeByteArrayOutputStream(length == UNKNOWN_LENGTH ? 256 : length + 4);
         try {
             byte[] hashPrevouts = new byte[32];
@@ -771,6 +788,7 @@ public class Transaction extends ChildMessage {
                 hashOutputs = Sha256Hash.hashTwice(bosHashOutputs.toByteArray());
             }
 
+            bos.write(sigHashPrefix);
             uint32ToByteStreamLE(version, bos);
             bos.write(hashPrevouts);
             bos.write(hashSequence);

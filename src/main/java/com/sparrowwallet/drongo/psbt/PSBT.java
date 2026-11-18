@@ -89,6 +89,14 @@ public class PSBT {
 
     private Transaction transactionForSigning;
 
+    //The bytes the chain puts before each signature hash preimage, set by whoever knows the chain (see Coin.getSigHashPrefix). Not serialized:
+    //where it is not set it is worked out from the coin mark with the chain tip unknown
+    private byte[] sigHashPrefix;
+
+    /** Why signatures that fail under Luckycoin's signature hash are refused, added to the message of the failure */
+    public static final String LUCKYCOIN_SIGNATURE_RULE = "Luckycoin signatures commit to its chain id from block 276500 on (replay protection). A signer "
+            + "that signs with Bitcoin's rule, as hardware wallets do, makes signatures Luckycoin nodes reject, so this PSBT cannot be used.";
+
     private static final Logger log = LoggerFactory.getLogger(PSBT.class);
 
     public PSBT(Transaction transaction) {
@@ -154,6 +162,7 @@ public class PSBT {
         }
 
         setCoin(wallet.getCoin());
+        sigHashPrefix = wallet.getSigHashPrefix();
 
         if(includeGlobalXpubs && wallet.getPolicyType() != PolicyType.SINGLE_SP) {
             for(Keystore keystore : wallet.getKeystores()) {
@@ -816,14 +825,18 @@ public class PSBT {
     }
 
     private void verifySignatures(List<PSBTInput> psbtInputs) throws PSBTSignatureException {
-        for(PSBTInput input : psbtInputs) {
-            boolean verified = input.verifySignatures();
-            if(!verified && !input.getPartialSignatures().isEmpty()) {
-                throw new PSBTSignatureException("Unverifiable partial signatures provided");
+        try {
+            for(PSBTInput input : psbtInputs) {
+                boolean verified = input.verifySignatures();
+                if(!verified && !input.getPartialSignatures().isEmpty()) {
+                    throw new PSBTSignatureException("Unverifiable partial signatures provided");
+                }
+                if(!verified && input.isTaproot() && input.getTapKeyPathSignature() != null) {
+                    throw new PSBTSignatureException("Unverifiable taproot keypath signature provided");
+                }
             }
-            if(!verified && input.isTaproot() && input.getTapKeyPathSignature() != null) {
-                throw new PSBTSignatureException("Unverifiable taproot keypath signature provided");
-            }
+        } catch(PSBTSignatureException e) {
+            throw withSigHashRule(e);
         }
     }
 
@@ -1267,7 +1280,13 @@ public class PSBT {
             //The non final fields are retained here, so the finalized signatures are verified against the signing scripts and keys already provided
             verificationInput.setFinalScriptSig(finalizedInput.getFinalScriptSig());
             verificationInput.setFinalScriptWitness(finalizedInput.getFinalScriptWitness());
-            verifyFinalizedSigHashes(verificationInput, verificationInput.verifyFinalizedSignatures());
+            Collection<TransactionSignature> signatures;
+            try {
+                signatures = verificationInput.verifyFinalizedSignatures();
+            } catch(PSBTSignatureException e) {
+                throw withSigHashRule(e);
+            }
+            verifyFinalizedSigHashes(verificationInput, signatures);
         }
     }
 
@@ -1388,7 +1407,9 @@ public class PSBT {
 
     public PSBT copy() {
         try {
-            return new PSBT(serialize(), false);
+            PSBT copy = new PSBT(serialize(), false);
+            copy.sigHashPrefix = sigHashPrefix == null ? null : sigHashPrefix.clone();
+            return copy;
         } catch(PSBTParseException e) {
             throw new IllegalStateException("Error copying existing PSBT: " + e.getMessage(), e);
         }
@@ -1673,6 +1694,35 @@ public class PSBT {
 
     public void setCoin(com.sparrowwallet.drongo.Coin coin) {
         globalProprietary.put(COIN_MARK_KEY, Utils.bytesToHex(coin.getName().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /**
+     * The bytes the chain this PSBT is for puts before each signature hash preimage (see Coin.getSigHashPrefix). Where no caller has set it, it is
+     * worked out from the coin mark on the current network with the chain tip unknown, and is empty for an unmarked PSBT.
+     */
+    public byte[] getSigHashPrefix() {
+        if(sigHashPrefix != null) {
+            return sigHashPrefix.clone();
+        }
+
+        com.sparrowwallet.drongo.Coin coin = getCoin();
+        return coin == null ? new byte[0] : coin.getSigHashPrefix(com.sparrowwallet.drongo.Network.get(), null);
+    }
+
+    /**
+     * Sets the signature hash prefix of the chain this PSBT is for, as worked out by a caller that knows the chain and its tip (Wallet.getSigHashPrefix)
+     */
+    public void setSigHashPrefix(byte[] sigHashPrefix) {
+        this.sigHashPrefix = sigHashPrefix == null ? null : sigHashPrefix.clone();
+    }
+
+    /** A signature failure on a chain with its own signature hash rule says so, since that rule is the likely cause */
+    private PSBTSignatureException withSigHashRule(PSBTSignatureException e) {
+        if(getSigHashPrefix().length == 0) {
+            return e;
+        }
+
+        return new PSBTSignatureException(e.getMessage() + ". " + LUCKYCOIN_SIGNATURE_RULE);
     }
 
     public Map<String, String> getGlobalProprietary() {

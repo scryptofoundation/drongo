@@ -11,6 +11,7 @@ import com.sparrowwallet.drongo.psbt.PSBT;
 import com.sparrowwallet.drongo.psbt.PSBTInput;
 import com.sparrowwallet.drongo.psbt.PSBTOutput;
 import com.sparrowwallet.drongo.psbt.PSBTProofException;
+import com.sparrowwallet.drongo.psbt.PSBTSignatureException;
 import com.sparrowwallet.drongo.silentpayments.*;
 
 import java.nio.charset.StandardCharsets;
@@ -580,6 +581,17 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
 
     public void setCoin(com.sparrowwallet.drongo.Coin coin) {
         this.coin = coin;
+    }
+
+    /**
+     * The bytes this wallet's chain puts before each signature hash preimage (see Coin.getSigHashPrefix), worked out from the wallet's coin, its
+     * network and the chain tip it last stored, which is how far it knows its chain has reached
+     */
+    public byte[] getSigHashPrefix() {
+        Wallet master = isMasterWallet() || getMasterWallet() == null ? this : getMasterWallet();
+        Network walletNetwork = master.getNetwork() != null ? master.getNetwork() : Network.get();
+        Integer tipHeight = storedBlockHeight != null ? storedBlockHeight : master.getStoredBlockHeight();
+        return getCoin().getSigHashPrefix(walletNetwork, tipHeight);
     }
 
     public PolicyType getPolicyType() {
@@ -1854,6 +1866,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
                 Script signingScript = getSigningScript(txInput, spentTxo);
                 List<TransactionSignature> signatures = txInput.hasWitness() ? txInput.getWitness().getSignatures() : txInput.getScriptSig().getSignatures();
                 Map<Byte, Sha256Hash> sigHashes = new HashMap<>();
+                byte[] sigHashPrefix = signingWallet.getSigHashPrefix();
 
                 for(ECKey sigPublicKey : keystoreKeysForNode.keySet()) {
                     for(TransactionSignature signature : signatures) {
@@ -1861,9 +1874,9 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
                             if(signingWallet.getScriptType() == P2TR) {
                                 return transaction.hashForTaprootSignature(spentOutputs, txInput.getIndex(), !P2TR.isScriptType(signingScript), signingScript, sigHashType, null);
                             } else if(txInput.hasWitness()) {
-                                return transaction.hashForWitnessSignature(txInput.getIndex(), signingScript.getProgram(), spentTxo.getValue(), sigHashType);
+                                return transaction.hashForWitnessSignature(txInput.getIndex(), signingScript.getProgram(), spentTxo.getValue(), sigHashType, sigHashPrefix);
                             } else {
-                                return transaction.hashForLegacySignature(txInput.getIndex(), signingScript.getProgram(), sigHashType);
+                                return transaction.hashForLegacySignature(txInput.getIndex(), signingScript.getProgram(), sigHashType, sigHashPrefix);
                             }
                         });
 
@@ -2135,6 +2148,7 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
      * @return A map keyed with the PSBTInput mapped to a map of the signatures and associated keystores that signed it
      */
     public Map<PSBTInput, Map<TransactionSignature, Keystore>> getSignedKeystores(PSBT psbt) {
+        psbt.setSigHashPrefix(getSigHashPrefix());
         Map<PSBTInput, WalletNode> signingNodes = getSigningNodes(psbt);
         Map<PSBTInput, Map<TransactionSignature, Keystore>> signedKeystores = new LinkedHashMap<>();
 
@@ -2184,12 +2198,15 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
             }
         }
 
+        psbt.setSigHashPrefix(getSigHashPrefix());
         sign(getSigningNodes(psbt));
     }
 
     public void sign(Map<PSBTInput, WalletNode> signingNodes) throws MnemonicException {
         for(Map.Entry<PSBTInput, WalletNode> signingEntry : signingNodes.entrySet()) {
             Wallet signingWallet = signingEntry.getValue().getWallet();
+            //The signature hash is the chain's, which this wallet knows, rather than Bitcoin's
+            signingEntry.getKey().getPsbt().setSigHashPrefix(signingWallet.getSigHashPrefix());
             for(Keystore keystore : signingWallet.getKeystores()) {
                 if(keystore.hasPrivateKey()) {
                     PSBTInput psbtInput = signingEntry.getKey();
@@ -2379,6 +2396,17 @@ public class Wallet extends Persistable implements Comparable<Wallet> {
     }
 
     public void finalise(PSBT psbt) {
+        //Signatures are taken as verified when finalising, which is only so where they were checked under this chain's signature hash. Where the chain
+        //has its own (Luckycoin), check them again under it, so a signature made with Bitcoin's rule elsewhere is refused here rather than at broadcast
+        psbt.setSigHashPrefix(getSigHashPrefix());
+        if(psbt.getSigHashPrefix().length > 0) {
+            try {
+                psbt.verifySignatures();
+            } catch(PSBTSignatureException e) {
+                throw new IllegalArgumentException(e.getMessage(), e);
+            }
+        }
+
         int threshold = getDefaultPolicy().getNumSignaturesRequired();
         Map<PSBTInput, WalletNode> signingNodes = getSigningNodes(psbt);
 

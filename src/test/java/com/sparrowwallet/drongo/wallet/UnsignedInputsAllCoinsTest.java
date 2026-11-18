@@ -27,8 +27,7 @@ import java.util.function.Function;
  * (with that key's public key and with the wallet's), a signature hash flag changed, and for multisig too few distinct signatures.
  * <p>
  * Signing and the check share drongo's signature hash, so these cases show they agree with each other, not with a chain. NetworkSignedSpendsTest holds
- * them to signatures each chain accepted; there Luckycoin mainnet does not match (its hash starts with a chain id drongo leaves out), so the Luckycoin
- * cases here pass only because both sides leave it out.
+ * them to signatures each chain accepted, Luckycoin's chain id included.
  */
 public class UnsignedInputsAllCoinsTest {
     private static final String TEST_MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -215,15 +214,21 @@ public class UnsignedInputsAllCoinsTest {
      * serialization as the server would return it
      */
     static Transaction signedSpend(Wallet wallet) throws Exception {
-        TransactionParameters params = new TransactionParameters(List.of(new PriorityUtxoSelector(HEIGHT + 6)), Collections.emptyList(),
-                List.of(new Payment(new P2PKHAddress(Utils.hexToBytes("cc00000000000000000000000000000000000033")), "test", PAYMENT_VALUE, false)),
-                Collections.emptyList(), Collections.emptySet(), 10.0d, 1.0d, 1.0d, null, HEIGHT + 6, false, false, true,
-                (w, utxos, outputs, vSize, rate) -> 0L);
-        PSBT psbt = wallet.createWalletTransaction(params).createPSBT();
+        PSBT psbt = spendPsbt(wallet);
         wallet.sign(psbt);
         wallet.finalise(psbt);
         return new Transaction(psbt.extractTransaction().bitcoinSerialize());
     }
+
+    /** The unsigned PSBT of a spend of both funded outputs, as the app creates it */
+    static PSBT spendPsbt(Wallet wallet) throws Exception {
+        TransactionParameters params = new TransactionParameters(List.of(new PriorityUtxoSelector(HEIGHT + 6)), Collections.emptyList(),
+                List.of(new Payment(new P2PKHAddress(Utils.hexToBytes("cc00000000000000000000000000000000000033")), "test", PAYMENT_VALUE, false)),
+                Collections.emptyList(), Collections.emptySet(), 10.0d, 1.0d, 1.0d, null, HEIGHT + 6, false, false, true,
+                (w, utxos, outputs, vSize, rate) -> 0L);
+        return wallet.createWalletTransaction(params).createPSBT();
+    }
+
 
     static Transaction redirect(Transaction signed) {
         Transaction altered = new Transaction(signed.bitcoinSerialize());

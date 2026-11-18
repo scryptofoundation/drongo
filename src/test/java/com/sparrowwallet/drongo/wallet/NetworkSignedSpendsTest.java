@@ -9,6 +9,9 @@ import com.sparrowwallet.drongo.crypto.SchnorrSignature;
 import com.sparrowwallet.drongo.policy.Policy;
 import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.protocol.*;
+import com.sparrowwallet.drongo.psbt.PSBT;
+import com.sparrowwallet.drongo.psbt.PSBTInput;
+import com.sparrowwallet.drongo.psbt.PSBTSignatureException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,14 +54,9 @@ public class NetworkSignedSpendsTest {
      */
     private static final byte[] LUCKYCOIN_CHAIN_ID = Utils.reverseBytes(Utils.hexToBytes("000000000000000000000000000000" + "4c55434b59434f494e5f5245564956414c"));
 
-    /**
-     * Network spends the check gets wrong today, each pinned by its own test below rather than run with the rest
-     */
-    private static final Set<String> KNOWN_DEFECTS = Set.of("b001140170e57c567796b95ff719bb88265d29db82f90da30b0b9bf2f7ef47e0");
-
     @TestFactory
     public List<DynamicTest> networkSpendsAreAcceptedAndTheirForgeriesFlagged() {
-        return SPENDS.stream().filter(spend -> !KNOWN_DEFECTS.contains(spend.txid())).map(spend -> DynamicTest.dynamicTest(spend.toString(), () -> {
+        return SPENDS.stream().map(spend -> DynamicTest.dynamicTest(spend.toString(), () -> {
             Coin scope = Coin.beginScope(spend.coin());
             try {
                 check(spend);
@@ -182,38 +180,149 @@ public class NetworkSignedSpendsTest {
     }
 
     /**
-     * Known defect, pinned so a fix flips it: drongo hashes Luckycoin as Bitcoin, without the chain id. The check therefore judges a real mainnet
-     * Luckycoin spend from the wallet unsigned (it would be dropped from the history with a warning that the server is dishonest), and every Luckycoin
-     * signature drongo makes commits to a hash mainnet nodes do not check, so they reject the transaction. When fixed, this test fails: move the
-     * spend out of KNOWN_DEFECTS and replace this test.
+     * A Luckycoin mainnet spend signed the way the app signs (PSBT, sign, finalise) carries signatures over the chain id hash, which is what mainnet
+     * nodes check, and not over Bitcoin's. The preimage here is built by this test, not by drongo. The multisig case is checked with drongo's hash,
+     * which the single signature case and the real spend above hold to the chain.
      */
     @Test
-    public void knownDefectLuckycoinMainnetSignatureHashLacksTheChainId() throws Exception {
-        NetworkSpend luckycoin = SPENDS.stream().filter(s -> s.coin() == Coin.LUCKYCOIN).findFirst().orElseThrow();
+    public void luckycoinMainnetSpendSignedByTheAppCommitsToTheChainId() throws Exception {
         Coin scope = Coin.beginScope(Coin.LUCKYCOIN);
         try {
-            Transaction transaction = new Transaction(Utils.hexToBytes(luckycoin.rawTransaction()));
-            Map<Sha256Hash, Transaction> spentTransactions = spentTransactions(luckycoin);
-            Function<Sha256Hash, Transaction> lookup = spentTransactions::get;
-            Map<Script, WalletNode> walletOutputScripts = new LinkedHashMap<>();
-            Wallet wallet = watchWallet(luckycoin, transaction, lookup, walletOutputScripts);
-            Assertions.assertEquals(1, wallet.getSigningNodes(transaction, lookup, walletOutputScripts).size());
-            Assertions.assertEquals(1, wallet.getUnsignedInputs(transaction, lookup, walletOutputScripts).size(), "the real spend is judged unsigned");
-
-            //A spend signed by a Luckycoin wallet here, the way the app signs: its signatures do not verify under the hash mainnet checks
             Wallet signing = UnsignedInputsAllCoinsTest.buildWallet(Coin.LUCKYCOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
-            UnsignedInputsAllCoinsTest.fund(signing, 0);
-            UnsignedInputsAllCoinsTest.fund(signing, 1);
-            Transaction signed = UnsignedInputsAllCoinsTest.signedSpend(signing);
+            Assertions.assertArrayEquals(LUCKYCOIN_CHAIN_ID, signing.getSigHashPrefix());
+            Transaction signed = signedLuckycoinSpend(signing);
             for(int i = 0; i < signed.getInputs().size(); i++) {
-                TransactionInput input = signed.getInputs().get(i);
-                Script spentScript = UnsignedInputsAllCoinsTest.body(signing, input.getOutpoint().getHash()).getOutputs().get((int)input.getOutpoint().getIndex()).getScript();
-                Assertions.assertTrue(verifiesP2pkh(signed, i, spentScript, new byte[0]), "input " + i + " signed over Bitcoin's legacy hash");
-                Assertions.assertFalse(verifiesP2pkh(signed, i, spentScript, LUCKYCOIN_CHAIN_ID), "input " + i + " not over Luckycoin's");
+                Script spentScript = spentScript(signing, signed, i);
+                Assertions.assertTrue(verifiesP2pkh(signed, i, spentScript, LUCKYCOIN_CHAIN_ID), "input " + i + " over Luckycoin's hash");
+                Assertions.assertFalse(verifiesP2pkh(signed, i, spentScript, new byte[0]), "input " + i + " not over Bitcoin's");
+            }
+
+            Wallet multisig = UnsignedInputsAllCoinsTest.buildWallet(Coin.LUCKYCOIN, PolicyType.MULTI_HD, ScriptType.P2SH);
+            Transaction multisigSigned = signedLuckycoinSpend(multisig);
+            for(int i = 0; i < multisigSigned.getInputs().size(); i++) {
+                List<ScriptChunk> chunks = multisigSigned.getInputs().get(i).getScriptSig().getChunks();
+                Script redeemScript = new Script(chunks.getLast().data);
+                ECKey[] keys = ScriptType.MULTISIG.getPublicKeysFromScript(redeemScript);
+                for(ScriptChunk chunk : chunks.subList(1, chunks.size() - 1)) {
+                    TransactionSignature signature = TransactionSignature.decodeFromBitcoin(chunk.data, false);
+                    Sha256Hash revival = multisigSigned.hashForLegacySignature(i, redeemScript.getProgram(), SigHash.ALL.value, LUCKYCOIN_CHAIN_ID);
+                    Sha256Hash bitcoin = multisigSigned.hashForLegacySignature(i, redeemScript.getProgram(), SigHash.ALL.value);
+                    Assertions.assertTrue(Arrays.stream(keys).anyMatch(key -> key.verify(revival, signature)), "multisig input " + i + " over Luckycoin's hash");
+                    Assertions.assertTrue(Arrays.stream(keys).noneMatch(key -> key.verify(bitcoin, signature)), "multisig input " + i + " not over Bitcoin's");
+                }
             }
         } finally {
             Coin.endScope(scope);
         }
+    }
+
+    /**
+     * The rule goes by the tip of the chain the transaction is for: at or above 276500 the chain id, below it Bitcoin's hash, on every network.
+     * Mainnet is far above it. A test chain with no known tip keeps Bitcoin's hash. No other coin ever takes a prefix.
+     */
+    @Test
+    public void luckycoinChainIdGoesByTheTipHeight() {
+        for(Integer tip : Arrays.asList(null, 0, 1000, 275999, 276499, 276500, 10_000_000)) {
+            Assertions.assertArrayEquals(LUCKYCOIN_CHAIN_ID, Coin.LUCKYCOIN.getSigHashPrefix(Network.MAINNET, tip), "mainnet tip " + tip);
+        }
+        for(Network network : List.of(Network.TESTNET, Network.REGTEST)) {
+            for(Integer tip : Arrays.asList(null, 0, 1000, 275999, 276499)) {
+                Assertions.assertArrayEquals(new byte[0], Coin.LUCKYCOIN.getSigHashPrefix(network, tip), network + " tip " + tip);
+            }
+            for(Integer tip : List.of(276500, 276501, 10_000_000)) {
+                Assertions.assertArrayEquals(LUCKYCOIN_CHAIN_ID, Coin.LUCKYCOIN.getSigHashPrefix(network, tip), network + " tip " + tip);
+            }
+        }
+        for(Coin coin : Coin.values()) {
+            if(coin == Coin.LUCKYCOIN) {
+                continue;
+            }
+            for(Network network : List.of(Network.MAINNET, Network.TESTNET, Network.REGTEST)) {
+                for(Integer tip : Arrays.asList(null, 0, 276500, 10_000_000)) {
+                    Assertions.assertArrayEquals(new byte[0], coin.getSigHashPrefix(network, tip), coin.getName() + " " + network + " tip " + tip);
+                }
+            }
+        }
+    }
+
+    /**
+     * The private Luckycoin test chains are mined from the testnet genesis and are far below the height, so a wallet there signs by Bitcoin's rule as
+     * their nodes check it. A test chain whose tip has reached the height signs with the chain id.
+     */
+    @Test
+    public void luckycoinTestChainSignsByItsTip() throws Exception {
+        Network.set(Network.TESTNET);
+        Coin scope = Coin.beginScope(Coin.LUCKYCOIN);
+        try {
+            for(int tip : List.of(1000, 276499, 276500)) {
+                Wallet signing = UnsignedInputsAllCoinsTest.buildWallet(Coin.LUCKYCOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+                UnsignedInputsAllCoinsTest.fund(signing, 0);
+                UnsignedInputsAllCoinsTest.fund(signing, 1);
+                PSBT psbt = UnsignedInputsAllCoinsTest.spendPsbt(signing);
+                //The tip the wallet knows when it signs, set after the spend is built since the test funding sits at a fixed height above it
+                signing.setStoredBlockHeight(tip);
+                signing.sign(psbt);
+                signing.finalise(psbt);
+                Transaction signed = new Transaction(psbt.extractTransaction().bitcoinSerialize());
+                boolean revival = tip >= Coin.LUCKYCOIN_CHAIN_ID_HEIGHT;
+                for(int i = 0; i < signed.getInputs().size(); i++) {
+                    Script spentScript = spentScript(signing, signed, i);
+                    Assertions.assertEquals(revival, verifiesP2pkh(signed, i, spentScript, LUCKYCOIN_CHAIN_ID), "tip " + tip + " input " + i + " over Luckycoin's hash");
+                    Assertions.assertEquals(!revival, verifiesP2pkh(signed, i, spentScript, new byte[0]), "tip " + tip + " input " + i + " over Bitcoin's hash");
+                }
+                Assertions.assertTrue(signing.getUnsignedInputs(signed, txid -> UnsignedInputsAllCoinsTest.body(signing, txid)).isEmpty(), "tip " + tip + " accepted by the check");
+            }
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    /**
+     * A Luckycoin PSBT signed elsewhere by Bitcoin's rule, as a hardware wallet or another signer would, is refused with the reason: when it is read
+     * (the app reads every incoming PSBT with its signatures verified), and again by finalise, so it never reaches a broadcast. One signed by the
+     * app reads, shows its signing keystore and finalises.
+     */
+    @Test
+    public void luckycoinPsbtSignedByBitcoinsRuleIsRefused() throws Exception {
+        Coin scope = Coin.beginScope(Coin.LUCKYCOIN);
+        try {
+            Wallet wallet = UnsignedInputsAllCoinsTest.buildWallet(Coin.LUCKYCOIN, PolicyType.SINGLE_HD, ScriptType.P2PKH);
+            UnsignedInputsAllCoinsTest.fund(wallet, 0);
+            UnsignedInputsAllCoinsTest.fund(wallet, 1);
+
+            PSBT bitcoinRule = UnsignedInputsAllCoinsTest.spendPsbt(wallet);
+            Assertions.assertEquals(Coin.LUCKYCOIN, bitcoinRule.getCoin());
+            bitcoinRule.setSigHashPrefix(new byte[0]);
+            for(Map.Entry<PSBTInput, WalletNode> entry : wallet.getSigningNodes(bitcoinRule).entrySet()) {
+                entry.getKey().sign(wallet.getKeystores().getFirst().getKey(entry.getValue()));
+            }
+            byte[] serialized = bitcoinRule.serialize();
+            PSBTSignatureException readError = Assertions.assertThrows(PSBTSignatureException.class, () -> new PSBT(serialized, true));
+            Assertions.assertTrue(readError.getMessage().contains(PSBT.LUCKYCOIN_SIGNATURE_RULE), readError.getMessage());
+            IllegalArgumentException finaliseError = Assertions.assertThrows(IllegalArgumentException.class, () -> wallet.finalise(bitcoinRule));
+            Assertions.assertTrue(finaliseError.getMessage().contains(PSBT.LUCKYCOIN_SIGNATURE_RULE), finaliseError.getMessage());
+            Assertions.assertFalse(bitcoinRule.isFinalized());
+
+            PSBT appSigned = UnsignedInputsAllCoinsTest.spendPsbt(wallet);
+            wallet.sign(appSigned);
+            PSBT read = new PSBT(appSigned.serialize(), true);
+            Assertions.assertTrue(wallet.getSignedKeystores(read).values().stream().allMatch(signatures -> signatures.size() == 1), "signing keystore shown");
+            wallet.finalise(read);
+            Assertions.assertTrue(read.isFinalized());
+        } finally {
+            Coin.endScope(scope);
+        }
+    }
+
+    private static Transaction signedLuckycoinSpend(Wallet wallet) throws Exception {
+        UnsignedInputsAllCoinsTest.fund(wallet, 0);
+        UnsignedInputsAllCoinsTest.fund(wallet, 1);
+        return UnsignedInputsAllCoinsTest.signedSpend(wallet);
+    }
+
+    private static Script spentScript(Wallet wallet, Transaction transaction, int index) {
+        TransactionInput input = transaction.getInputs().get(index);
+        return UnsignedInputsAllCoinsTest.body(wallet, input.getOutpoint().getHash()).getOutputs().get((int)input.getOutpoint().getIndex()).getScript();
     }
 
     /**

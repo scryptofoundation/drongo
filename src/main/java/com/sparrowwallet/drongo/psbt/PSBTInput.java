@@ -1478,6 +1478,11 @@ public class PSBTInput {
         return index;
     }
 
+    /** The PSBT this input belongs to */
+    public PSBT getPsbt() {
+        return psbt;
+    }
+
     void setIndex(int index) {
         this.index = index;
     }
@@ -1510,9 +1515,9 @@ public class PSBTInput {
             hash = psbt.getTransactionForSigning().hashForTaprootSignature(spentUtxos, index, !P2TR.isScriptType(connectedScript), connectedScript, sigHashType, null);
         } else if(Arrays.asList(WITNESS_TYPES).contains(scriptType)) {
             long prevValue = getUtxo().getValue();
-            hash = psbt.getTransactionForSigning().hashForWitnessSignature(index, connectedScript.getProgram(), prevValue, sigHashType);
+            hash = psbt.getTransactionForSigning().hashForWitnessSignature(index, connectedScript.getProgram(), prevValue, sigHashType, psbt.getSigHashPrefix());
         } else {
-            hash = psbt.getTransactionForSigning().hashForLegacySignature(index, connectedScript.getProgram(), sigHashType);
+            hash = psbt.getTransactionForSigning().hashForLegacySignature(index, connectedScript.getProgram(), sigHashType, psbt.getSigHashPrefix());
         }
 
         return hash;

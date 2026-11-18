@@ -19,9 +19,12 @@ public class FinalizingPSBTWallet extends Wallet {
     private final Map<PSBTInput, WalletNode> signedInputNodes = new LinkedHashMap<>();
     private final Map<WalletNode, List<ECKey>> signedNodeKeys = new LinkedHashMap<>();
     private int numSignatures;
+    //The PSBT's own, since this wallet has no chain of its own to work it out from
+    private final byte[] sigHashPrefix;
 
     public FinalizingPSBTWallet(PSBT psbt) {
         super("Finalizing PSBT Wallet");
+        sigHashPrefix = psbt.getSigHashPrefix();
 
         if(!psbt.isSigned()) {
             throw new IllegalArgumentException("Only a fully signed or finalized PSBT can be used");
@@ -81,6 +84,11 @@ public class FinalizingPSBTWallet extends Wallet {
         }
 
         return signedKeystores;
+    }
+
+    @Override
+    public byte[] getSigHashPrefix() {
+        return sigHashPrefix.clone();
     }
 
     @Override
