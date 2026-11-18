@@ -587,6 +587,15 @@ public class Transaction extends ChildMessage {
         return inputs.size() == 1 && inputs.get(0).isCoinBase();
     }
 
+    /**
+     * Whether the transaction carries the MWEB flag (8) with the null extension, the single byte 0: how a HogEx (the
+     * integration transaction only a block's last transaction may be) is serialized. Unlike {@link #isHogEx()} it does not
+     * accept the output script shape alone, which anyone can build.
+     */
+    public boolean hasNullMwebExtension() {
+        return segwit && (segwitFlag & 8) > 0 && mwebData != null && mwebData.length == 1 && mwebData[0] == 0;
+    }
+
     public boolean isHogEx() {
         if (segwit && (segwitFlag & 8) > 0 && mwebData.length == 1 && mwebData[0] == 0) {
             return true;
